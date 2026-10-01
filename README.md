@@ -10,8 +10,9 @@ This repository currently contains planning documents and an illustrative, stati
 
 1. Read [`docs/PROJECT_CHARTER.md`](docs/PROJECT_CHARTER.md) for product intent and current assumptions.
 2. Read [`docs/DETAILED_ROADMAP.md`](docs/DETAILED_ROADMAP.md) for milestone sequence and gates.
-3. Review [`docs/ADR-001-FOUNDATION.md`](docs/ADR-001-FOUNDATION.md) for the open platform decision.
-4. Open [`prototype/job-to-cash/index.html`](prototype/job-to-cash/index.html) for the sample workflow concept.
+3. Review [`docs/VALIDATION_PLAN.md`](docs/VALIDATION_PLAN.md) and the [discovery research kit](docs/discovery/README.md) before conducting customer research.
+4. Review [`docs/ADR-001-FOUNDATION.md`](docs/ADR-001-FOUNDATION.md) for the open platform decision.
+5. Open [`prototype/job-to-cash/index.html`](prototype/job-to-cash/index.html) for the sample workflow concept.
 
 ## Scope
 

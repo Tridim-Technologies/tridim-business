@@ -19,6 +19,9 @@ build/
 *.pem
 *.key
 
+# Private discovery records must never be committed to this public repository
+/docs/discovery/private/
+
 # Editor and OS files
 .DS_Store
 .idea/
