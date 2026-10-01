@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   quality:
-    name: Markdown and prototype checks
+    name: Backend, frontend, Markdown and prototype checks
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -34,3 +34,15 @@ jobs:
         run: uv run pymarkdown scan README.md docs/**/*.md .github/**/*.md
       - name: Validate prototype markup and script
         run: uv run python scripts/check_prototype.py
+      - name: Check Django configuration
+        run: uv run python backend/manage.py check
+      - name: Lint and format Python
+        run: uv run ruff check backend && uv run ruff format --check backend
+      - name: Test Django APIs and organization permissions
+        run: uv run python backend/manage.py test accounts customers
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build React application
+        working-directory: frontend
+        run: npm run build

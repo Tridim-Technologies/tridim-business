@@ -1,68 +1,42 @@
-# ADR-001: Product Foundation and Language
+# ADR-001: Django Modular Monolith Foundation
 
-**Status:** Proposed; final choice is gated on foundation assessment and prototype  
-**Date:** 1 October 2026  
-**Decision owners:** Founder; legal, accounting and security review owners unassigned
+**Status:** Accepted for the initial product build; production architecture remains subject to implementation evidence
 
-## Context
+**Date:** 1 October 2026
 
-Tridim Business Platform has a global product ambition. The initial customer segment and first market are undecided; Kenya is one candidate. The initial workflow to validate is customer → quotation → job → time/expenses → invoice → payment allocation/reconciliation → reporting. No demand, customer, delivery team, budget or production system has been established.
+**Decision owner:** Founder
 
-Two different strategies are under review: adopt and extend an existing business application, or build a focused custom product. The founder’s preferred custom-build stack is Python, Django, Django REST Framework, PostgreSQL and TypeScript/React. FastAPI is excluded from consideration by founder preference. Go and Rust are not proposed for the business core; Kubernetes does not require either language.
+## Decision
 
-## Options
+Build the first Tridim Business application as a **Python + Django + Django REST Framework + PostgreSQL backend with a React + TypeScript web client**. Use a modular monolith with explicit domain boundaries. Manage Python dependencies and environments with `uv`; manage the web client's dependencies with npm and its committed lockfile.
 
-### A. Frappe Framework + ERPNext + Frappe HR
+This choice follows the founder's stated direction and available product plan. It is not a claim that customer demand, the target market, or comparative framework fit has been validated. Do not maintain parallel Django and Frappe/ERPNext implementations.
 
-Use the existing applications as the operational system of record, with supported Tridim applications and integrations. This may avoid recreating mature workflows. Fit, usability, extension cost, upgrade path, tenant isolation, current supported versions, Kenya workflows and license implications must be demonstrated.
+## Product scope for the first build
 
-Frappe’s official policy lists Frappe Framework as MIT and ERPNext as GPLv3; it says other applications are governed by their own repositories. Frappe HR’s repository identifies GPL-3.0. These are separate components and licenses. Review exact versions, dependencies, extensions, trademarks and distribution model before product or repository decisions.
+The starting product hypothesis is growing service businesses that need a connected path from customer and quotation to job, invoice, payment allocation, reconciliation, and owner visibility. Service firms of roughly 10–75 employees are the initial working profile; it is an assumption, not a proven market segment. The product has a global ambition. Kenya is a candidate operating market, not a limit or a compliance claim.
 
-### B. Custom modular monolith
+The first software increment establishes sign-in, organization membership, and an organization-scoped customer directory. Subsequent increments should complete the job-to-cash workflow before adding broad ERP, commerce, payroll, inventory, or marketplace scope.
 
-Python + Django + Django REST Framework + PostgreSQL + TypeScript/React. Django’s ORM, migrations, authentication and internal admin can reduce basic application assembly. Django Admin is an internal operations tool, not the customer experience. Model permissions alone do not enforce organization-specific access. Build explicit domain operations, tenant-scoped authorization, auditability and financial invariants.
+## Architecture guardrails
 
-Keep business modules in one deployable application initially, with explicit domain boundaries. Add workers/object storage only when requirements demonstrate need. Avoid a separate service per domain.
+- Keep the application as a modular monolith. Kubernetes, microservices, a message broker, and multi-region operation are not prerequisites.
+- Every business record belongs to an organization; access is checked server-side on every request and operation.
+- Use explicit domain operations and status transitions for financial records. Use exact decimal arithmetic, idempotent event processing, auditable corrections, and a single agreed financial source of truth.
+- Keep jurisdiction-specific taxes, payroll, payment integrations, and reporting out of scope until their requirements and support responsibilities are verified.
+- Use synthetic data during development. Do not load real business records before the pilot-readiness controls are in place.
+- Django Admin is a restricted setup and operations tool, not the customer-facing interface.
 
-### C. Other greenfield languages/frameworks
+## Consequences and open decisions
 
-Not an active evaluation path at this stage. Reopen only if the prototype identifies a specific limitation or team/product constraint that the selected route cannot meet.
+- The stack decision removes a framework comparison as a prerequisite to starting implementation.
+- The initial service-business workflow, employee band, beachhead market, accounting boundary, production tenancy model, and detailed role matrix remain assumptions to refine through internal build and later bounded use.
+- The software license, production hosting, deployment topology, and support model remain undecided.
+- Python 3.12 is the current project baseline for Django 6.0. Reassess dependency support before upgrades.
 
-## Recommendation
+## References
 
-**Provisional recommendation:** evaluate Option A against the agreed end-to-end workflow; treat Option B as the preferred custom-build baseline. If Frappe/ERPNext cannot meet workflow, tenant/security, upgrade, licensing and UX criteria at acceptable cost, proceed with a Django modular monolith.
-
-This is not approval to begin full implementation, choose a production host, publish an open-source license or claim compliance. Do not combine ERPNext and Django as coequal backends or maintain two ledgers. If a React interface is tested against Frappe, explicitly cost the API/auth/permission/upgrade work.
-
-## Core repository and license
-
-The local `tridim-business` directory is initialized as a Git repository on `main`; its GitHub remote is configured but has not yet been verified or pushed. The company website remains in its separate repository. The software license and public release readiness remain undecided. Review ownership, dependency licenses, trademarks and distribution obligations before publication.
-
-## Prototype and evaluation criteria
-
-Demonstrate the same thin vertical slice on the existing-platform and custom Django routes:
-
-1. Create an organization, owner, finance user, manager and employee.
-2. Create a customer and quotation; accept the quotation and create a linked job.
-3. Create an invoice and record a payment.
-4. Deliver the same external payment event twice and prove it creates one payment/allocation.
-5. Show the correct outstanding balance to an authorized user; deny cross-organization and unauthorized-role access.
-6. Simulate failed processing and recovery; demonstrate backup/restore of prototype data.
-
-Score both routes with evidence for workflow completeness, correctness, user task completion, tenant isolation, license/trademark constraints, integration feasibility, maintainability, upgrade effort, security, recovery, development time, ongoing cost and administration/support effort. Use identical acceptance criteria.
-
-## Consequences and follow-up
-
-- Python + Django is the baseline custom stack, not yet the final platform choice.
-- TypeScript + React is the leading product web-client direction; choose exact routing/rendering tools after prototype needs are known.
-- PostgreSQL is the proposed custom database; accounting source-of-truth and ledger scope require customer/accountant validation.
-- Broker, hosting, Kubernetes, tenancy deployment model, open-source license and mobile strategy remain open.
-- Legal/accounting review and prospective design partners are dependencies; owners are unassigned.
-
-## Primary references checked 1 October 2026
-
-- Frappe licensing/trademark policy: https://docs.frappe.io/legal/others/license-and-trademark
-- Frappe HR repository/license: https://github.com/frappe/hrms
-- ERPNext licensing: https://frappe.io/erpnext/license-trademark
-- Django documentation (models, migrations, admin, auth): https://docs.djangoproject.com/en/6.0/
-- OSI Open Source Definition: https://opensource.org/osd
+- [Django 6.0 installation FAQ](https://docs.djangoproject.com/en/6.0/faq/install/)
+- [Django REST Framework](https://www.django-rest-framework.org/)
+- [React version history](https://react.dev/versions)
+- [uv project documentation](https://docs.astral.sh/uv/concepts/projects/)
