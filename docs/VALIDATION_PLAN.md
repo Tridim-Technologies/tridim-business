@@ -46,6 +46,8 @@ Show the clickable concept only after hearing the user's recent workflow. Ask wh
 
 ## Evidence record
 
+Use the blank assets in [`docs/discovery/`](discovery/README.md) to record and synthesize interviews without repeating this guide. Keep only respondent IDs in working notes; store completed research records in an access-controlled private location outside this public repository. The repository should contain templates and aggregated, non-identifying conclusions only.
+
 | Field | Notes |
 |---|---|
 | Respondent ID, date, segment, role | |
