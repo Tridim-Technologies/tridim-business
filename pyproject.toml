@@ -1,0 +1,35 @@
+[project]
+name = "tridim-business-tooling"
+version = "0.0.0"
+description = "Development and release tooling for Tridim Business"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "python-semantic-release>=10,<11",
+    "pymarkdownlnt>=0.9,<1",
+]
+
+[tool.semantic_release]
+branch = "main"
+tag_format = "v{version}"
+version_toml = ["pyproject.toml:project.version"]
+build_command = ""
+commit_message = "chore(release): {version} [skip ci]"
+allow_zero_version = true
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["build", "chore", "ci", "docs", "feat", "fix", "perf", "refactor", "revert", "style", "test"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
+
+[tool.pymarkdown]
+plugins.md013.enabled = false
+plugins.md003.enabled = false
+plugins.md033.enabled = false
+plugins.md041.enabled = false
+plugins.md022.enabled = false
+plugins.md032.enabled = false
+plugins.md034.enabled = false
+plugins.md036.enabled = false
