@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+*.sqlite3
 .pytest_cache/
 .mypy_cache/
 
@@ -18,9 +19,6 @@ build/
 !.env.example
 *.pem
 *.key
-
-# Private discovery records must never be committed to this public repository
-/docs/discovery/private/
 
 # Editor and OS files
 .DS_Store

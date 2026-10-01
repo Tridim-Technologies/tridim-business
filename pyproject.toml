@@ -2,14 +2,23 @@
 name = "tridim-business-tooling"
 version = "0.0.0"
 description = "Development and release tooling for Tridim Business"
-requires-python = ">=3.11"
-dependencies = []
+requires-python = ">=3.12"
+dependencies = [
+    "Django>=6.0,<6.1",
+    "djangorestframework>=3.16,<4",
+    "dj-database-url>=2.3,<3",
+    "psycopg[binary]>=3.2,<4",
+]
 
 [dependency-groups]
 dev = [
+    "ruff>=0.11,<1",
     "python-semantic-release>=10,<11",
     "pymarkdownlnt>=0.9,<1",
 ]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
 
 [tool.semantic_release]
 branch = "main"
