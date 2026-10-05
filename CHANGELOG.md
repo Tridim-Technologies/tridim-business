@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.4.0 (2026-10-05)
+
+### Features
+
+- **jobs**: Add auditable delivery workflow
+  ([#12](https://github.com/Tridim-Technologies/tridim-business/pull/12),
+  [`ddf2e13`](https://github.com/Tridim-Technologies/tridim-business/commit/ddf2e137a0068b07e59b37580f650d4063ac1d70))
+
+
 ## v0.3.0 (2026-10-05)
 
 ### Bug Fixes
