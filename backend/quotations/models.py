@@ -102,6 +102,10 @@ class QuotationStatusHistory(models.Model):
 class Job(models.Model):
     class Status(models.TextChoices):
         OPEN = "open", "Open"
+        IN_PROGRESS = "in_progress", "In progress"
+        BLOCKED = "blocked", "Blocked"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name="jobs"
@@ -115,6 +119,7 @@ class Job(models.Model):
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.OPEN
     )
+    due_date = models.DateField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_jobs"
     )
@@ -122,3 +127,73 @@ class Job(models.Model):
 
     class Meta:
         ordering = ["-created_at", "id"]
+
+
+class JobStatusHistory(models.Model):
+    job = models.ForeignKey(
+        Job, on_delete=models.CASCADE, related_name="status_history"
+    )
+    previous_status = models.CharField(max_length=16, blank=True)
+    status = models.CharField(max_length=16, choices=Job.Status.choices)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    note = models.CharField(max_length=240, blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+
+class JobDueDateHistory(models.Model):
+    job = models.ForeignKey(
+        Job, on_delete=models.CASCADE, related_name="due_date_history"
+    )
+    previous_due_date = models.DateField(null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+
+class JobAssignment(models.Model):
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="assignments")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="job_assignments",
+    )
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_job_assignments",
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    unassigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="removed_job_assignments",
+        null=True,
+        blank=True,
+    )
+    unassigned_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["assigned_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["job", "user"],
+                condition=models.Q(unassigned_at__isnull=True),
+                name="unique_active_job_assignment",
+            )
+        ]
+
+
+class JobNote(models.Model):
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="notes")
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    content = models.TextField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]

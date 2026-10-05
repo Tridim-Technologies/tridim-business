@@ -161,6 +161,12 @@ class QuotationWorkflowTests(TestCase):
         self.assertEqual(job.organization, self.organization)
         self.assertEqual(job.customer, self.customer)
         self.assertEqual(job.created_by, self.operations)
+        self.assertEqual(
+            list(
+                job.status_history.values_list("previous_status", "status", "actor_id")
+            ),
+            [("", Job.Status.OPEN, self.operations.pk)],
+        )
         self.assertEqual(Job.objects.count(), 1)
         self.assertEqual(
             list(quotation.status_history.values_list("status", flat=True)),

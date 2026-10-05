@@ -9,6 +9,13 @@ from quotations.views import (
     quotation_transition_view,
     quotation_revision_view,
 )
+from quotations.job_views import (
+    job_assignment_create_view,
+    job_assignment_remove_view,
+    job_detail_view,
+    job_note_create_view,
+    jobs_view,
+)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -44,5 +51,30 @@ urlpatterns = [
         "api/organizations/<uuid:organization_id>/quotations/<uuid:quotation_id>/revise/",
         quotation_revision_view,
         name="quotation-revise",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/jobs/",
+        jobs_view,
+        name="jobs",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/",
+        job_detail_view,
+        name="job-detail",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/assignments/",
+        job_assignment_create_view,
+        name="job-assignment-create",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/assignments/<int:assignment_id>/remove/",
+        job_assignment_remove_view,
+        name="job-assignment-remove",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/notes/",
+        job_note_create_view,
+        name="job-note-create",
     ),
 ]

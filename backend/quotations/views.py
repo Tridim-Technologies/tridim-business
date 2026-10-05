@@ -9,7 +9,13 @@ from rest_framework.exceptions import ValidationError
 from accounts.models import Membership
 from customers.models import Customer
 
-from .models import Job, Quotation, QuotationLine, QuotationStatusHistory
+from .models import (
+    Job,
+    JobStatusHistory,
+    Quotation,
+    QuotationLine,
+    QuotationStatusHistory,
+)
 from .serializers import QuotationCreateSerializer, QuotationSerializer
 
 QUOTE_WRITERS = {Membership.Role.OWNER, Membership.Role.ADMIN, Membership.Role.SALES}
@@ -302,7 +308,7 @@ def quotation_transition_view(request, organization_id, quotation_id):
             ),
         )
         if action == "accept":
-            Job.objects.get_or_create(
+            job, created = Job.objects.get_or_create(
                 source_quotation=quotation,
                 defaults={
                     "organization_id": organization_id,
@@ -310,6 +316,14 @@ def quotation_transition_view(request, organization_id, quotation_id):
                     "created_by": request.user,
                 },
             )
+            if created:
+                JobStatusHistory.objects.create(
+                    job=job,
+                    previous_status="",
+                    status=job.status,
+                    actor=request.user,
+                    note="Job created from accepted quotation",
+                )
     return JsonResponse(
         QuotationSerializer(_quotation(organization_id, quotation_id)).data
     )

@@ -9,6 +9,13 @@ type Quote = {
   lines: { id: number; description: string; quantity: string; unit_price: string }[]
   status_history: { status: string; actor: string; created_at: string }[]; job_id: number | null
 }
+type Job = {
+  id: number; customer: number; customer_name: string; source_quotation_id: string; status: string; due_date: string | null
+  status_history: { previous_status: string; status: string; actor: string; created_at: string; note: string }[]
+  due_date_history: { previous_due_date: string | null; due_date: string | null; actor: string; created_at: string }[]
+  assignments: { id: number; user: string; assigned_by: string; assigned_at: string; unassigned_by: string | null; unassigned_at: string | null }[]
+  notes: { id: number; author: string; content: string; created_at: string }[]; created_at: string
+}
 type Session = { authenticated: boolean; user?: { id: number; username: string }; organizations?: Organization[] }
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -31,6 +38,7 @@ export default function App() {
   const [organization, setOrganization] = useState('')
   const [customers, setCustomers] = useState<Customer[]>([])
   const [quotations, setQuotations] = useState<Quote[]>([])
+  const [jobs, setJobs] = useState<Job[]>([])
   const [customerStatus, setCustomerStatus] = useState<'active' | 'archived' | 'all'>('active')
   const [customerSearch, setCustomerSearch] = useState('')
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
@@ -50,16 +58,17 @@ export default function App() {
 
   const refreshData = useCallback(async () => {
     if (!organization) return
-    const [customerData, quoteData] = await Promise.all([
+    const [customerData, quoteData, jobData] = await Promise.all([
       api<{ results: Customer[] }>(`/api/organizations/${organization}/customers/?status=${customerStatus}&search=${encodeURIComponent(customerSearch)}`),
       api<{ results: Quote[] }>(`/api/organizations/${organization}/quotations/`),
+      api<{ results: Job[] }>(`/api/organizations/${organization}/jobs/`),
     ])
-    setCustomers(customerData.results); setQuotations(quoteData.results); setError('')
+    setCustomers(customerData.results); setQuotations(quoteData.results); setJobs(jobData.results); setError('')
   }, [organization, customerStatus, customerSearch])
 
   useEffect(() => { refreshSession().catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false)) }, [])
   useEffect(() => {
-    if (!session?.authenticated || !organization) { setCustomers([]); setQuotations([]); return }
+    if (!session?.authenticated || !organization) { setCustomers([]); setQuotations([]); setJobs([]); return }
     refreshData().catch((reason: Error) => setError(reason.message))
   }, [session, organization, refreshData])
 
@@ -117,6 +126,40 @@ export default function App() {
     } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
   }
 
+  async function updateJob(job: Job, updates: { status?: string; due_date?: string | null }) {
+    setError(''); setSaving(true)
+    try {
+      await api(`/api/organizations/${organization}/jobs/${job.id}/`, { method: 'PATCH', headers: csrfHeader(), body: JSON.stringify(updates) })
+      await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function addJobAssignment(event: FormEvent<HTMLFormElement>, job: Job) {
+    event.preventDefault(); setError(''); setSaving(true)
+    const formElement = event.currentTarget; const form = new FormData(formElement)
+    try {
+      await api(`/api/organizations/${organization}/jobs/${job.id}/assignments/`, { method: 'POST', headers: csrfHeader(), body: JSON.stringify({ username: form.get('username') }) })
+      formElement.reset(); await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function removeJobAssignment(job: Job, assignmentId: number) {
+    setError(''); setSaving(true)
+    try {
+      await api(`/api/organizations/${organization}/jobs/${job.id}/assignments/${assignmentId}/remove/`, { method: 'POST', headers: csrfHeader(), body: JSON.stringify({}) })
+      await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function addJobNote(event: FormEvent<HTMLFormElement>, job: Job) {
+    event.preventDefault(); setError(''); setSaving(true)
+    const formElement = event.currentTarget; const form = new FormData(formElement)
+    try {
+      await api(`/api/organizations/${organization}/jobs/${job.id}/notes/`, { method: 'POST', headers: csrfHeader(), body: JSON.stringify({ content: form.get('content') }) })
+      formElement.reset(); await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
   async function updateCustomer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!editingCustomer) return
@@ -141,7 +184,7 @@ export default function App() {
 
   async function signOut() {
     await api('/api/session/', { method: 'DELETE', headers: csrfHeader() })
-    setSession({ authenticated: false }); setCustomers([]); setQuotations([])
+    setSession({ authenticated: false }); setCustomers([]); setQuotations([]); setJobs([])
   }
 
   if (loading) return <main className="loading">Loading your workspace…</main>
@@ -156,8 +199,10 @@ export default function App() {
   const canWriteQuotes = ['owner', 'admin', 'sales'].includes(activeOrg?.role || '')
   const canAccept = ['owner', 'admin', 'operations'].includes(activeOrg?.role || '')
   const canManageCustomers = ['owner', 'admin', 'sales', 'operations'].includes(activeOrg?.role || '')
+  const canManageJobs = ['owner', 'admin', 'operations'].includes(activeOrg?.role || '')
+  const canWriteJobNotes = canManageJobs || activeOrg?.role === 'employee'
   const label = page === 'jobs' ? 'Jobs' : page === 'quotations' ? 'Quotations' : 'Customers'
-  const visibleQuotes = page === 'jobs' ? quotations.filter((quote) => quote.job_id) : quotations
+  const visibleQuotes = quotations
   return <div className="app-shell">
     <aside className="sidebar"><div className="brand"><div className="brand-mark">T</div><div><strong>Tridim</strong><small>BUSINESS</small></div></div>
       <div className="workspace-label">WORKSPACE</div><div className="workspace">{activeOrg?.name || 'No organization'}</div>
@@ -180,10 +225,26 @@ export default function App() {
           {canManageCustomers && <section className="panel add-panel"><div className="panel-heading"><div><h2>Add a customer</h2><p>Create a record for this workspace.</p></div></div><form className="stack-form" onSubmit={addCustomer}><label>Business or customer name <span className="required">*</span><input name="name" placeholder="e.g. Northstar Services" required /></label><label>Contact person<input name="contact_name" placeholder="Full name" /></label><label>Email address<input type="email" name="email" placeholder="name@business.com" /></label><label>Phone number<input name="phone" placeholder="+1 555 000 0000" /></label><button className="primary" disabled={saving || !organization}>{saving ? 'Saving…' : 'Add customer'} <span>＋</span></button></form></section>}</div>
           {editingCustomer && <section className="panel add-panel customer-edit-panel"><div className="panel-heading"><div><h2>Edit {editingCustomer.name}</h2><p>Update contact details for this organization.</p></div></div><form key={editingCustomer.id} className="stack-form" onSubmit={updateCustomer}><label>Business or customer name <span className="required">*</span><input name="name" defaultValue={editingCustomer.name} required /></label><label>Contact person<input name="contact_name" defaultValue={editingCustomer.contact_name} /></label><label>Email address<input type="email" name="email" defaultValue={editingCustomer.email} /></label><label>Phone number<input name="phone" defaultValue={editingCustomer.phone} /></label><button className="primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'} <span>✓</span></button><button type="button" className="quiet-action" onClick={() => setEditingCustomer(null)}>Cancel</button></form></section>}
           <p className="page-note"><span>◈</span> Customer records are visible only to members of this organization.</p>
-        </> : <>
-          <div className="page-heading"><div><p className="eyebrow">WORKFLOW</p><h1>{label}</h1><p className="muted">{page === 'jobs' ? 'Jobs begin when your organization accepts a quotation.' : 'Prepare a quote, track its decision, and create a job on acceptance.'}</p></div><span className="count-pill">{visibleQuotes.length} {visibleQuotes.length === 1 ? 'record' : 'records'}</span></div>
+        </> : page === 'jobs' ? <>
+          <div className="page-heading"><div><p className="eyebrow">DELIVERY</p><h1>Jobs</h1><p className="muted">Track delivery progress for work created from accepted quotations.</p></div><span className="count-pill">{jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}</span></div>
           {error && <div className="alert inline-alert">{error}</div>}
-          <div className="content-grid"><section className="panel customer-panel"><div className="panel-heading"><div><h2>{page === 'jobs' ? 'Accepted work' : 'Quotation register'}</h2><p>Records for {activeOrg?.name || 'your organization'}</p></div></div>
+          <section className="panel job-register"><div className="panel-heading"><div><h2>Job delivery register</h2><p>Records for {activeOrg?.name || 'your organization'}</p></div></div>
+            {jobs.length ? <div className="job-list">{jobs.map((job) => {
+              const activeAssignments = job.assignments.filter((assignment) => !assignment.unassigned_at)
+              return <article className="job-card" key={job.id}>
+                <div className="job-top"><div><strong>{job.customer_name}</strong><span className="quote-id">Job #{job.id} · From quote {job.source_quotation_id.slice(0, 8).toUpperCase()}</span></div><span className={`quote-status ${job.status}`}>{job.status.replace('_', ' ')}</span></div>
+                <div className="job-fields">{canManageJobs ? <><label>Status<select aria-label={`Job ${job.id} status`} value={job.status} disabled={saving} onChange={(event) => updateJob(job, { status: event.target.value })}><option value="open">Open</option><option value="in_progress">In progress</option><option value="blocked">Blocked</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label><label>Due date<input aria-label={`Job ${job.id} due date`} type="date" value={job.due_date || ''} disabled={saving} onChange={(event) => updateJob(job, { due_date: event.target.value || null })} /></label></> : <div className="job-meta">Due {job.due_date || 'date not set'}</div>}</div>
+                <div className="job-assignments"><h3>Assigned team</h3>{activeAssignments.length ? activeAssignments.map((assignment) => <div className="assignment-chip" key={assignment.id}><span>{assignment.user}</span>{canManageJobs && <button className="quiet-action" disabled={saving} onClick={() => removeJobAssignment(job, assignment.id)}>Unassign</button>}</div>) : <p className="form-note">No team members assigned yet.</p>}{canManageJobs && <form className="job-inline-form" onSubmit={(event) => addJobAssignment(event, job)}><input name="username" placeholder="Organization member username" aria-label={`Assign member to job ${job.id}`} required /><button className="quiet-action" disabled={saving}>Assign</button></form>}</div>
+                {(job.status_history.length > 0 || job.due_date_history.length > 0 || job.assignments.length > activeAssignments.length) && <details className="job-history"><summary>View delivery history</summary>{job.status_history.map((entry, index) => <div key={`status-${index}`}>{entry.previous_status || 'created'} → {entry.status} · {entry.actor} · {new Date(entry.created_at).toLocaleString()}{entry.note ? ` · ${entry.note}` : ''}</div>)}{job.due_date_history.map((entry, index) => <div key={`date-${index}`}>Due date {entry.previous_due_date || 'unset'} → {entry.due_date || 'unset'} · {entry.actor} · {new Date(entry.created_at).toLocaleString()}</div>)}{job.assignments.filter((assignment) => assignment.unassigned_at).map((assignment) => <div key={`assignment-${assignment.id}`}>{assignment.user} assigned by {assignment.assigned_by} · unassigned by {assignment.unassigned_by} · {new Date(assignment.unassigned_at!).toLocaleString()}</div>)}</details>}
+                <div className="job-notes"><h3>Delivery notes</h3>{job.notes.map((note) => <div className="job-note" key={note.id}><p>{note.content}</p><span>{note.author} · {new Date(note.created_at).toLocaleString()}</span></div>)}{canWriteJobNotes && <form className="job-note-form" onSubmit={(event) => addJobNote(event, job)}><textarea name="content" placeholder="Add a delivery update" maxLength={2000} required /><button className="primary" disabled={saving}>Add note <span>＋</span></button></form>}</div>
+              </article>
+            })}</div> : <div className="empty-state"><div className="empty-icon">▦</div><strong>No jobs yet</strong><p>When your organization accepts a quotation, the linked job will appear here for delivery tracking.</p></div>}
+          </section>
+          <p className="page-note"><span>◈</span> Job changes are scoped to this organization and retained in delivery history.</p>
+        </> : <>
+          <div className="page-heading"><div><p className="eyebrow">WORKFLOW</p><h1>{label}</h1><p className="muted">Prepare a quote, track its decision, and create a job on acceptance.</p></div><span className="count-pill">{visibleQuotes.length} {visibleQuotes.length === 1 ? 'record' : 'records'}</span></div>
+          {error && <div className="alert inline-alert">{error}</div>}
+          <div className="content-grid"><section className="panel customer-panel"><div className="panel-heading"><div><h2>Quotation register</h2><p>Records for {activeOrg?.name || 'your organization'}</p></div></div>
             {visibleQuotes.length ? <div className="quote-list">{visibleQuotes.map((quote) => <article className="quote-row" key={quote.id}>
               <div className="quote-top"><div><strong>{quote.customer_name}</strong><span className="quote-id">Quote {quote.series_id.slice(0, 8).toUpperCase()} · Revision {quote.revision_number}{!quote.is_current ? ' · historical' : ''}</span></div><span className={`quote-status ${quote.status}`}>{quote.status}</span></div>
               <div className="quote-line">{quote.lines.map((line) => <div key={line.id}>{line.description} · {line.quantity} × {quote.currency} {line.unit_price}</div>)}</div>
@@ -192,7 +253,7 @@ export default function App() {
               {quote.status === 'draft' && canWriteQuotes && <div className="quote-actions"><button disabled={saving} onClick={() => transition(quote, 'send')}>Send</button><button disabled={saving} onClick={() => startRevision(quote)}>Revise</button></div>}
               {quote.status === 'sent' && <div className="quote-actions">{canAccept && <button className="action-primary" disabled={saving} onClick={() => transition(quote, 'accept')}>Accept & create job</button>}{canWriteQuotes && <><button disabled={saving} onClick={() => transition(quote, 'reject')}>Reject</button><button disabled={saving} onClick={() => transition(quote, 'withdraw')}>Withdraw</button></>}</div>}
               {quote.status === 'sent' && canWriteQuotes && <div className="quote-actions"><button disabled={saving} onClick={() => startRevision(quote)}>Create revision</button></div>}
-            </article>)}</div> : <div className="empty-state"><div className="empty-icon">{page === 'jobs' ? '▦' : '↗'}</div><strong>{page === 'jobs' ? 'No accepted jobs yet' : 'No quotations yet'}</strong><p>{page === 'jobs' ? 'Accepted quotations will appear here as linked jobs.' : 'Create a draft quotation to start this workflow.'}</p></div>}
+            </article>)}</div> : <div className="empty-state"><div className="empty-icon">↗</div><strong>No quotations yet</strong><p>Create a draft quotation to start this workflow.</p></div>}
           </section>
           {page === 'quotations' && canWriteQuotes && <section className="panel add-panel"><div className="panel-heading"><div><h2>{editingQuote ? `Revise quotation · v${editingQuote.revision_number}` : 'New quotation'}</h2><p>{editingQuote ? 'This creates a new draft revision and preserves this version.' : 'Start with one service line.'}</p></div></div><form key={editingQuote?.id || 'new'} className="stack-form" onSubmit={addQuotation}>
             <label>Customer <span className="required">*</span><select name="customer_id" required defaultValue={editingQuote?.customer ?? ''}><option value="" disabled>Select a customer</option>{editingQuote && !customers.some((customer) => customer.id === editingQuote.customer) && <option value={editingQuote.customer}>{editingQuote.customer_name} (current customer)</option>}{customers.filter((customer) => customer.status === 'active').map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
