@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.2.0 (2026-10-05)
+
+### Features
+
+- **workflow**: Add quotations and accepted jobs
+  ([#8](https://github.com/Tridim-Technologies/tridim-business/pull/8),
+  [`45ece08`](https://github.com/Tridim-Technologies/tridim-business/commit/45ece08c6346d52344fd131cd26f518e7230187d))
+
+
 ## v0.1.0 (2026-10-01)
 
 ### Documentation
