@@ -20,7 +20,7 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Create a linked job idempotently when an authorized user accepts a quotation.
 - **Acceptance:** the customer → quote → accepted job path works with audit history and tenant-scoped authorization.
 
-**Implementation progress:** The workflow supports tenant-scoped quote drafts, line items, validity dates, send/accept/reject/withdraw transitions, status history, and one linked job per accepted quote. Issue #9 adds auditable customer archive/restore and search, plus immutable quote revisions with their own line items and status history. The milestone remains open until the slice is merged and the remaining job delivery fields are defined.
+**Implementation progress:** P1 is complete in v0.3.0: customers have auditable active/archived lifecycle and search, quotations have immutable revisions and status history, and accepting the current valid revision creates one tenant-scoped job. Job delivery status, assignments, due dates, and notes are the next P2 slice; invoicing and receivables follow afterward.
 
 ## P2 — Delivery to receivable visibility
 
@@ -28,6 +28,8 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Add invoices from completed/accepted work and define a controlled correction path.
 - Provide owner/finance views for open work and outstanding invoices.
 - **Acceptance:** synthetic scenarios produce explainable job and receivable states; the app does not imply full accounting.
+
+**Implementation progress:** Issue #11 implements auditable job status, assignments, due dates, and delivery notes. Invoice and receivable work remains a later slice in this milestone.
 
 ## P3 — Payments and reconciliation
 
