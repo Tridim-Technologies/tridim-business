@@ -16,6 +16,7 @@ from quotations.job_views import (
     job_note_create_view,
     jobs_view,
 )
+from invoicing.views import invoice_issue_view, invoice_void_view, invoices_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -76,5 +77,20 @@ urlpatterns = [
         "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/notes/",
         job_note_create_view,
         name="job-note-create",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/invoices/",
+        invoices_view,
+        name="invoices",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/invoice/",
+        invoice_issue_view,
+        name="invoice-issue",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/invoices/<uuid:invoice_id>/void/",
+        invoice_void_view,
+        name="invoice-void",
     ),
 ]

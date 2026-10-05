@@ -52,6 +52,8 @@ These are starting profiles, not substitutes for organization-scoped policy. Eac
 
 - Finance creates an invoice from an accepted quotation/job, retaining links and preventing unintended duplicate invoices.
 - Issued invoices have clear state, unique numbering policy, due date, currency, totals and audit history.
+- Initial internal invoice numbering uses a per-organization calendar-year sequence; voided numbers remain reserved. Until organizations have a timezone setting, the calendar year follows the application timezone (currently UTC). This internal default does not claim to meet jurisdiction-specific numbering rules.
+- Internal invoice totals preserve exact quantity × unit-price products to five decimal places; currency-specific rounding must be defined before customer-facing invoice documents or payment allocation.
 - Changes after issue use controlled cancellation, credit-note or adjustment flows rather than silent edits.
 - A payment can be recorded manually or imported through a verified provider route; it can be allocated subject to explicit rules.
 - Repeated delivery of the same provider event cannot create a second payment or allocation. Event and processing result are traceable.
@@ -62,6 +64,7 @@ These are starting profiles, not substitutes for organization-scoped policy. Eac
 ### Reporting and export
 
 - Owner sees jobs by agreed status and outstanding receivables with a documented definition.
+- Do not label an issued invoice total as outstanding until recorded payments, credits and adjustments are applied under explicit allocation rules.
 - Finance exports invoice, payment, allocation and reconciliation records in a documented format.
 - Reports show currency, date range, as-of time and definitions. Do not label invoice totals as recognized revenue without an accounting policy.
 - Exports enforce the same tenant and role restrictions as the application.

@@ -20,16 +20,16 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Create a linked job idempotently when an authorized user accepts a quotation.
 - **Acceptance:** the customer → quote → accepted job path works with audit history and tenant-scoped authorization.
 
-**Implementation progress:** P1 is complete in v0.3.0: customers have auditable active/archived lifecycle and search, quotations have immutable revisions and status history, and accepting the current valid revision creates one tenant-scoped job. Job delivery status, assignments, due dates, and notes are the next P2 slice; invoicing and receivables follow afterward.
+**Implementation progress:** P1 is complete in v0.3.0: customers have auditable active/archived lifecycle and search, quotations have immutable revisions and status history, and accepting the current valid revision creates one tenant-scoped job. Job delivery status, assignments, due dates, and notes shipped in v0.4.0; basic invoicing and receivable visibility are the remaining P2 work.
 
 ## P2 — Delivery to receivable visibility
 
 - Add job status, assignments, due dates, and delivery notes.
 - Add invoices from completed/accepted work and define a controlled correction path.
-- Provide owner/finance views for open work and outstanding invoices.
-- **Acceptance:** synthetic scenarios produce explainable job and receivable states; the app does not imply full accounting.
+- Provide owner/finance views for open jobs and issued invoice totals with due dates. Show an outstanding balance only after payment allocations are tracked.
+- **Acceptance:** synthetic scenarios produce explainable job and issued-invoice states; any balance is based on recorded allocations, and the app does not imply full accounting.
 
-**Implementation progress:** Issue #11 implements auditable job status, assignments, due dates, and delivery notes. Invoice and receivable work remains a later slice in this milestone.
+**Implementation progress:** Issue #11 shipped auditable job status, assignments, due dates, and delivery notes in v0.4.0. Issue #13 implements an internal invoice register with per-organization annual numbering and void-and-reissue history; tax, payment allocation, and jurisdictional compliance remain out of scope. P2 remains in progress until this invoice and owner/finance visibility slice is merged; payment recording and reconciliation remain in P3.
 
 ## P3 — Payments and reconciliation
 
