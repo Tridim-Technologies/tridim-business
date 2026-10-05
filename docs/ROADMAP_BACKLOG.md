@@ -2,7 +2,7 @@
 
 **Status:** Founder-directed starting scope; market fit and production readiness are not validated
 
-**Last updated:** 1 October 2026
+**Last updated:** 5 October 2026
 
 This backlog turns the existing product plan into an implementation sequence. It does not represent customer commitments or a delivery date.
 
@@ -19,6 +19,8 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Add quotations, line items, revisions, expiry, and explicit acceptance/rejection transitions.
 - Create a linked job idempotently when an authorized user accepts a quotation.
 - **Acceptance:** the customer → quote → accepted job path works with audit history and tenant-scoped authorization.
+
+**Implementation progress:** The first workflow slice now supports tenant-scoped quote drafts, line items, validity dates, send/accept/reject/withdraw transitions, status history, and one linked job per accepted quote. Customer lifecycle management, quotation revisions, and additional job delivery fields remain open; the milestone is not complete.
 
 ## P2 — Delivery to receivable visibility
 

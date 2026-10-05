@@ -4,7 +4,7 @@ Tridim Business is a global-ambition business operations platform from Tridim Te
 
 ## Project status
 
-This repository contains the first internal alpha foundation alongside planning documents and an illustrative workflow prototype. The prototype uses synthetic data, has no backend and saves nothing.
+This repository contains the first internal alpha foundation and planning documents. Signed-in organization members can manage customers, prepare quotations, record quotation decisions, and create one linked job when a quotation is accepted. Tax and quotation totals are not calculated. The illustrative workflow prototype uses synthetic data, has no backend and saves nothing.
 
 ## Start here
 
@@ -55,7 +55,7 @@ Development tooling is managed with [uv](https://docs.astral.sh/uv/) using `pypr
 uv run pymarkdown scan README.md 'docs/**/*.md' '.github/**/*.md'
 uv run python scripts/check_prototype.py
 uv run python backend/manage.py check
-uv run python backend/manage.py test accounts customers
+uv run python backend/manage.py test accounts customers quotations
 (cd frontend && npm ci && npm run build)
 ```
 
