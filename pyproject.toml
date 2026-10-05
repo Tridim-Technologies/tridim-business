@@ -24,7 +24,10 @@ select = ["E4", "E7", "E9", "F"]
 branch = "main"
 tag_format = "v{version}"
 version_toml = ["pyproject.toml:project.version"]
-build_command = ""
+build_command = """
+uv lock --upgrade-package "$PACKAGE_NAME"
+git add uv.lock
+"""
 commit_message = "chore(release): {version} [skip ci]"
 allow_zero_version = true
 
