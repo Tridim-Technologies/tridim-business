@@ -59,6 +59,6 @@ uv run python backend/manage.py test accounts customers quotations
 (cd frontend && npm ci && npm run build)
 ```
 
-Pull requests to `main` run these checks automatically. Merges to `main` run [Python Semantic Release](https://python-semantic-release.readthedocs.io/) and create a version tag and GitHub release for qualifying Conventional Commits. `feat` creates a minor release, `fix` and `perf` create patch releases, and a `!` or `BREAKING CHANGE:` footer creates a major release. Documentation, chores, and CI-only changes do not create a release. No Python package is published.
+Pull requests to `main` run these checks automatically. Merges to `main` run [Python Semantic Release](https://python-semantic-release.readthedocs.io/) and create a version tag and GitHub release for qualifying Conventional Commits. The release command updates the project entry in `uv.lock` with the new version so later locked installs remain in sync. `feat` creates a minor release, `fix` and `perf` create patch releases, and a `!` or `BREAKING CHANGE:` footer creates a major release. Documentation, chores, and CI-only changes do not create a release. No Python package is published.
 
 Use Conventional Commit messages (for example, `feat(workflow): add quote approval`) so release notes and versions can be generated from the project history.

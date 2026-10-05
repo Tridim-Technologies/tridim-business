@@ -84,6 +84,14 @@ class QuotationWorkflowTests(TestCase):
             content_type="application/json",
         )
 
+    def revise(self, quotation, payload=None, user=None):
+        self.client.force_login(user or self.sales)
+        return self.client.post(
+            reverse("quotation-revise", args=[self.organization.pk, quotation.pk]),
+            payload or self.payload,
+            content_type="application/json",
+        )
+
     def test_sales_can_create_decimal_quotation_with_creation_history(self):
         quotation = self.create_quotation()
         self.assertEqual(quotation.currency, "KES")
@@ -209,6 +217,67 @@ class QuotationWorkflowTests(TestCase):
         self.assertEqual(quotation.status, Quotation.Status.EXPIRED)
         self.assertTrue(quotation.status_history.filter(status="expired").exists())
         self.assertFalse(Job.objects.exists())
+
+    def test_revision_preserves_prior_snapshot_and_uses_current_revision_for_job(self):
+        original = self.create_quotation()
+        self.assertEqual(self.transition(original, "send").status_code, 200)
+        payload = {
+            **self.payload,
+            "currency": "usd",
+            "lines": [
+                {
+                    "description": "Updated work",
+                    "quantity": "3.000",
+                    "unit_price": "90.00",
+                },
+                {"description": "Travel", "quantity": "1.000", "unit_price": "15.00"},
+            ],
+        }
+        response = self.revise(original, payload)
+        self.assertEqual(response.status_code, 201, response.content)
+        revised = Quotation.objects.get(pk=response.json()["id"])
+        self.assertEqual(revised.series_id, original.series_id)
+        self.assertEqual(revised.revision_number, 2)
+        self.assertEqual(revised.supersedes, original)
+        self.assertEqual(revised.customer, original.customer)
+        self.assertEqual(revised.currency, "USD")
+        self.assertEqual(
+            list(revised.lines.values_list("description", flat=True)),
+            ["Updated work", "Travel"],
+        )
+        original.refresh_from_db()
+        self.assertEqual(original.status, Quotation.Status.SUPERSEDED)
+        self.assertEqual(original.lines.get().description, "Synthetic service")
+        self.assertTrue(
+            original.status_history.filter(status=Quotation.Status.SUPERSEDED).exists()
+        )
+        self.assertTrue(response.json()["is_current"])
+
+        self.assertEqual(
+            self.transition(original, "accept", self.operations).status_code, 409
+        )
+        self.assertEqual(self.transition(revised, "send").status_code, 200)
+        accepted = self.transition(revised, "accept", self.operations)
+        self.assertEqual(accepted.status_code, 200, accepted.content)
+        self.assertEqual(Job.objects.count(), 1)
+        self.assertEqual(Job.objects.get().source_quotation, revised)
+
+    def test_revision_requires_current_editable_quote_and_same_customer(self):
+        quotation = self.create_quotation()
+        other_customer_response = self.revise(
+            quotation, {**self.payload, "customer_id": self.other_customer.pk}
+        )
+        self.assertEqual(other_customer_response.status_code, 400)
+        self.assertEqual(self.revise(quotation, user=self.finance).status_code, 403)
+        self.transition(quotation, "send")
+        self.assertEqual(self.revise(quotation).status_code, 201)
+        self.assertEqual(self.revise(quotation).status_code, 409)
+
+    def test_accepted_quotation_cannot_be_revised(self):
+        quotation = self.create_quotation()
+        self.transition(quotation, "send")
+        self.transition(quotation, "accept", self.operations)
+        self.assertEqual(self.revise(quotation).status_code, 409)
 
     def test_unauthenticated_user_cannot_list_quotations(self):
         self.assertEqual(self.client.get(self.list_url).status_code, 401)

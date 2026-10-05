@@ -39,16 +39,25 @@ class QuotationSerializer(serializers.ModelSerializer):
     lines = QuotationLineSerializer(many=True, read_only=True)
     status_history = QuotationStatusHistorySerializer(many=True, read_only=True)
     job_id = serializers.IntegerField(source="job.pk", read_only=True, allow_null=True)
+    is_current = serializers.SerializerMethodField()
+    supersedes_id = serializers.UUIDField(read_only=True, allow_null=True)
+
+    def get_is_current(self, quotation):
+        return not hasattr(quotation, "revision")
 
     class Meta:
         model = Quotation
         fields = (
             "id",
+            "series_id",
             "customer",
             "customer_name",
             "currency",
             "valid_until",
             "status",
+            "revision_number",
+            "supersedes_id",
+            "is_current",
             "lines",
             "status_history",
             "job_id",

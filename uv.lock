@@ -963,7 +963,7 @@ wheels = [
 
 [[package]]
 name = "tridim-business-tooling"
-version = "0.1.0"
+version = "0.2.0"
 source = { virtual = "." }
 dependencies = [
     { name = "dj-database-url" },

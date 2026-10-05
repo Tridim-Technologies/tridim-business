@@ -20,7 +20,7 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Create a linked job idempotently when an authorized user accepts a quotation.
 - **Acceptance:** the customer → quote → accepted job path works with audit history and tenant-scoped authorization.
 
-**Implementation progress:** The first workflow slice now supports tenant-scoped quote drafts, line items, validity dates, send/accept/reject/withdraw transitions, status history, and one linked job per accepted quote. Customer lifecycle management, quotation revisions, and additional job delivery fields remain open; the milestone is not complete.
+**Implementation progress:** The workflow supports tenant-scoped quote drafts, line items, validity dates, send/accept/reject/withdraw transitions, status history, and one linked job per accepted quote. Issue #9 adds auditable customer archive/restore and search, plus immutable quote revisions with their own line items and status history. The milestone remains open until the slice is merged and the remaining job delivery fields are defined.
 
 ## P2 — Delivery to receivable visibility
 

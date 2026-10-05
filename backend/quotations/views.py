@@ -23,6 +23,8 @@ TRANSITIONS = {
     },
 }
 
+REVISION_STATUSES = {Quotation.Status.DRAFT, Quotation.Status.SENT}
+
 
 def _membership(request, organization_id):
     if not request.user.is_authenticated:
@@ -39,7 +41,7 @@ def _quotation(organization_id, quotation_id):
     return (
         Quotation.objects.filter(organization_id=organization_id, id=quotation_id)
         .select_related("customer")
-        .prefetch_related("lines", "status_history__actor")
+        .prefetch_related("lines", "status_history__actor", "revision")
         .first()
     )
 
@@ -53,7 +55,7 @@ def quotations_view(request, organization_id):
         quotes = (
             Quotation.objects.filter(organization_id=organization_id)
             .select_related("customer")
-            .prefetch_related("lines", "status_history__actor")
+            .prefetch_related("lines", "status_history__actor", "revision")
         )
         return JsonResponse({"results": QuotationSerializer(quotes, many=True).data})
     if membership.role not in QUOTE_WRITERS:
@@ -73,7 +75,9 @@ def quotations_view(request, organization_id):
         return JsonResponse(validation_error.detail, status=400)
     values = serializer.validated_data
     customer = Customer.objects.filter(
-        id=values["customer_id"], organization_id=organization_id
+        id=values["customer_id"],
+        organization_id=organization_id,
+        status=Customer.Status.ACTIVE,
     ).first()
     if customer is None:
         return JsonResponse(
@@ -108,6 +112,104 @@ def quotations_view(request, organization_id):
     except IntegrityError:
         return JsonResponse(
             {"detail": "The quotation could not be created."}, status=400
+        )
+    return JsonResponse(QuotationSerializer(quotation).data, status=201)
+
+
+@require_http_methods(["POST"])
+def quotation_revision_view(request, organization_id, quotation_id):
+    membership, error = _membership(request, organization_id)
+    if error:
+        return error
+    if membership.role not in QUOTE_WRITERS:
+        return JsonResponse(
+            {"detail": "You do not have permission to revise quotations."}, status=403
+        )
+    try:
+        payload = json.loads(request.body or b"{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"detail": "Invalid JSON."}, status=400)
+    if not isinstance(payload, dict):
+        return JsonResponse({"detail": "A JSON object is required."}, status=400)
+    serializer = QuotationCreateSerializer(data=payload)
+    try:
+        serializer.is_valid(raise_exception=True)
+    except ValidationError as validation_error:
+        return JsonResponse(validation_error.detail, status=400)
+    values = serializer.validated_data
+    if values["valid_until"] < timezone.localdate():
+        return JsonResponse(
+            {"valid_until": ["The expiry date must be today or later."]}, status=400
+        )
+    customer_id = values["customer_id"]
+    customer = Customer.objects.filter(
+        id=customer_id, organization_id=organization_id
+    ).first()
+    if customer is None:
+        return JsonResponse(
+            {"customer_id": ["Select a customer in this organization."]}, status=400
+        )
+    try:
+        with transaction.atomic():
+            previous = (
+                Quotation.objects.filter(
+                    organization_id=organization_id, id=quotation_id
+                )
+                .select_for_update()
+                .first()
+            )
+            if previous is None:
+                return JsonResponse({"detail": "Quotation not found."}, status=404)
+            if previous.status not in REVISION_STATUSES or hasattr(
+                previous, "revision"
+            ):
+                return JsonResponse(
+                    {
+                        "detail": "Only the current draft or sent quotation can be revised."
+                    },
+                    status=409,
+                )
+            if customer.pk != previous.customer_id:
+                return JsonResponse(
+                    {"customer_id": ["A revision must keep the original customer."]},
+                    status=400,
+                )
+            previous_status = previous.status
+            previous.status = Quotation.Status.SUPERSEDED
+            previous.save(update_fields=["status", "updated_at"])
+            QuotationStatusHistory.objects.create(
+                quotation=previous,
+                previous_status=previous_status,
+                status=Quotation.Status.SUPERSEDED,
+                actor=request.user,
+                note="Replaced by a new quotation revision",
+            )
+            quotation = Quotation.objects.create(
+                series_id=previous.series_id,
+                revision_number=previous.revision_number + 1,
+                supersedes=previous,
+                organization_id=organization_id,
+                customer=customer,
+                currency=values["currency"].upper(),
+                valid_until=values["valid_until"],
+                created_by=request.user,
+            )
+            QuotationLine.objects.bulk_create(
+                [
+                    QuotationLine(quotation=quotation, position=index, **line)
+                    for index, line in enumerate(values["lines"])
+                ]
+            )
+            QuotationStatusHistory.objects.create(
+                quotation=quotation,
+                previous_status="",
+                status=Quotation.Status.DRAFT,
+                actor=request.user,
+                note=f"Revision {quotation.revision_number} created",
+            )
+    except IntegrityError:
+        return JsonResponse(
+            {"detail": "This quotation was revised by another request."}, status=409
         )
     return JsonResponse(QuotationSerializer(quotation).data, status=201)
 
