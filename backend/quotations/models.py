@@ -15,8 +15,18 @@ class Quotation(models.Model):
         REJECTED = "rejected", "Rejected"
         WITHDRAWN = "withdrawn", "Withdrawn"
         EXPIRED = "expired", "Expired"
+        SUPERSEDED = "superseded", "Superseded"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    series_id = models.UUIDField(default=uuid.uuid4, editable=False, db_index=True)
+    revision_number = models.PositiveSmallIntegerField(default=1)
+    supersedes = models.OneToOneField(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="revision",
+        null=True,
+        blank=True,
+    )
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name="quotations"
     )
@@ -38,6 +48,12 @@ class Quotation(models.Model):
 
     class Meta:
         ordering = ["-created_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["series_id", "revision_number"],
+                name="unique_quotation_series_revision",
+            )
+        ]
 
     def __str__(self):
         return f"Quotation {self.pk} ({self.status})"

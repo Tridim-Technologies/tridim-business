@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 
 type Organization = { id: string; name: string; role: string }
-type Customer = { id: number; name: string; contact_name: string; email: string; phone: string }
+type Customer = { id: number; name: string; contact_name: string; email: string; phone: string; status: 'active' | 'archived'; status_history: { previous_status: string; status: string; actor: string; created_at: string }[] }
 type Quote = {
-  id: string; customer: number; customer_name: string; currency: string; valid_until: string; status: string
+  id: string; series_id: string; revision_number: number; supersedes_id: string | null; is_current: boolean
+  customer: number; customer_name: string; currency: string; valid_until: string; status: string
   lines: { id: number; description: string; quantity: string; unit_price: string }[]
   status_history: { status: string; actor: string; created_at: string }[]; job_id: number | null
 }
@@ -30,6 +31,11 @@ export default function App() {
   const [organization, setOrganization] = useState('')
   const [customers, setCustomers] = useState<Customer[]>([])
   const [quotations, setQuotations] = useState<Quote[]>([])
+  const [customerStatus, setCustomerStatus] = useState<'active' | 'archived' | 'all'>('active')
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
+  const [editingQuote, setEditingQuote] = useState<Quote | null>(null)
+  const [quoteLines, setQuoteLines] = useState([{ description: '', quantity: '1', unit_price: '' }])
   const [page, setPage] = useState<'customers' | 'quotations' | 'jobs'>('customers')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -45,11 +51,11 @@ export default function App() {
   const refreshData = useCallback(async () => {
     if (!organization) return
     const [customerData, quoteData] = await Promise.all([
-      api<{ results: Customer[] }>(`/api/organizations/${organization}/customers/`),
+      api<{ results: Customer[] }>(`/api/organizations/${organization}/customers/?status=${customerStatus}&search=${encodeURIComponent(customerSearch)}`),
       api<{ results: Quote[] }>(`/api/organizations/${organization}/quotations/`),
     ])
     setCustomers(customerData.results); setQuotations(quoteData.results); setError('')
-  }, [organization])
+  }, [organization, customerStatus, customerSearch])
 
   useEffect(() => { refreshSession().catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false)) }, [])
   useEffect(() => {
@@ -79,11 +85,49 @@ export default function App() {
     event.preventDefault(); setError(''); setSaving(true)
     const formElement = event.currentTarget; const form = new FormData(event.currentTarget)
     try {
-      await api(`/api/organizations/${organization}/quotations/`, { method: 'POST', headers: csrfHeader(), body: JSON.stringify({
+      const payload = {
         customer_id: Number(form.get('customer_id')), currency: form.get('currency'), valid_until: form.get('valid_until'),
-        lines: [{ description: form.get('description'), quantity: form.get('quantity'), unit_price: form.get('unit_price') }],
-      }) })
-      formElement.reset(); await refreshData()
+        lines: quoteLines,
+      }
+      const path = editingQuote
+        ? `/api/organizations/${organization}/quotations/${editingQuote.id}/revise/`
+        : `/api/organizations/${organization}/quotations/`
+      await api(path, { method: 'POST', headers: csrfHeader(), body: JSON.stringify(payload) })
+      formElement.reset(); setEditingQuote(null); setQuoteLines([{ description: '', quantity: '1', unit_price: '' }]); await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  function startRevision(quote: Quote) {
+    setEditingQuote(quote)
+    setQuoteLines(quote.lines.map(({ description, quantity, unit_price }) => ({ description, quantity, unit_price })))
+  }
+
+  function changeQuoteLine(index: number, key: 'description' | 'quantity' | 'unit_price', value: string) {
+    setQuoteLines((lines) => lines.map((line, lineIndex) => lineIndex === index ? { ...line, [key]: value } : line))
+  }
+
+  async function toggleCustomer(customer: Customer) {
+    setError(''); setSaving(true)
+    try {
+      await api(`/api/organizations/${organization}/customers/${customer.id}/`, {
+        method: 'POST', headers: csrfHeader(),
+        body: JSON.stringify({ action: customer.status === 'active' ? 'archive' : 'restore' }),
+      })
+      await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function updateCustomer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!editingCustomer) return
+    setError(''); setSaving(true)
+    const form = new FormData(event.currentTarget)
+    try {
+      await api(`/api/organizations/${organization}/customers/${editingCustomer.id}/`, {
+        method: 'PATCH', headers: csrfHeader(),
+        body: JSON.stringify({ name: form.get('name'), contact_name: form.get('contact_name'), email: form.get('email'), phone: form.get('phone') }),
+      })
+      setEditingCustomer(null); await refreshData()
     } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
   }
 
@@ -129,30 +173,34 @@ export default function App() {
         {page === 'customers' ? <>
           <div className="page-heading"><div><p className="eyebrow">RELATIONSHIPS</p><h1>Customers</h1><p className="muted">Keep the people and businesses you work with in one place.</p></div><span className="count-pill">{customers.length} {customers.length === 1 ? 'customer' : 'customers'}</span></div>
           {error && <div className="alert inline-alert">{error}</div>}
-          <div className="content-grid"><section className="panel customer-panel"><div className="panel-heading"><div><h2>Customer directory</h2><p>Records for {activeOrg?.name || 'your organization'}</p></div><span className="search-glyph">⌕</span></div>
-            {customers.length ? <div className="customer-list">{customers.map((customer) => <article className="customer-row" key={customer.id}><span className="customer-avatar">{customer.name.slice(0, 1).toUpperCase()}</span><div className="customer-info"><strong>{customer.name}</strong><span>{customer.contact_name || customer.email || 'No contact details yet'}</span></div><span className="status-dot" title="Active record" /></article>)}</div> : <div className="empty-state"><div className="empty-icon">◎</div><strong>Your customer list starts here</strong><p>Add a customer to keep their contact details ready for your next quote.</p></div>}
+          <div className="content-grid"><section className="panel customer-panel"><div className="panel-heading"><div><h2>Customer directory</h2><p>Records for {activeOrg?.name || 'your organization'}</p></div></div>
+            <div className="directory-tools"><input aria-label="Search customers" placeholder="Search name or contact" value={customerSearch} onChange={(event) => setCustomerSearch(event.target.value)} /><select aria-label="Customer status" value={customerStatus} onChange={(event) => setCustomerStatus(event.target.value as typeof customerStatus)}><option value="active">Active customers</option><option value="archived">Archived customers</option><option value="all">All customers</option></select></div>
+            {customers.length ? <div className="customer-list">{customers.map((customer) => <article className="customer-row" key={customer.id}><span className="customer-avatar">{customer.name.slice(0, 1).toUpperCase()}</span><div className="customer-info"><strong>{customer.name}</strong><span>{customer.contact_name || customer.email || 'No contact details yet'} · {customer.status}</span>{customer.status_history.length > 0 && <details className="customer-history"><summary>Lifecycle history</summary>{customer.status_history.map((entry, index) => <span key={`${entry.status}-${index}`}>{entry.previous_status || 'created'} → {entry.status} · {entry.actor} · {new Date(entry.created_at).toLocaleString()}</span>)}</details>}</div>{canManageCustomers && <><button className="quiet-action" disabled={saving} onClick={() => setEditingCustomer(customer)}>Edit</button><button className="quiet-action" disabled={saving} onClick={() => toggleCustomer(customer)}>{customer.status === 'active' ? 'Archive' : 'Restore'}</button></>}</article>)}</div> : <div className="empty-state"><div className="empty-icon">◎</div><strong>{customerStatus === 'archived' ? 'No archived customers' : 'Your customer list starts here'}</strong><p>{customerStatus === 'archived' ? 'Archived records remain available here and keep their existing job and quotation links.' : 'Add a customer to keep their contact details ready for your next quote.'}</p></div>}
           </section>
           {canManageCustomers && <section className="panel add-panel"><div className="panel-heading"><div><h2>Add a customer</h2><p>Create a record for this workspace.</p></div></div><form className="stack-form" onSubmit={addCustomer}><label>Business or customer name <span className="required">*</span><input name="name" placeholder="e.g. Northstar Services" required /></label><label>Contact person<input name="contact_name" placeholder="Full name" /></label><label>Email address<input type="email" name="email" placeholder="name@business.com" /></label><label>Phone number<input name="phone" placeholder="+1 555 000 0000" /></label><button className="primary" disabled={saving || !organization}>{saving ? 'Saving…' : 'Add customer'} <span>＋</span></button></form></section>}</div>
+          {editingCustomer && <section className="panel add-panel customer-edit-panel"><div className="panel-heading"><div><h2>Edit {editingCustomer.name}</h2><p>Update contact details for this organization.</p></div></div><form key={editingCustomer.id} className="stack-form" onSubmit={updateCustomer}><label>Business or customer name <span className="required">*</span><input name="name" defaultValue={editingCustomer.name} required /></label><label>Contact person<input name="contact_name" defaultValue={editingCustomer.contact_name} /></label><label>Email address<input type="email" name="email" defaultValue={editingCustomer.email} /></label><label>Phone number<input name="phone" defaultValue={editingCustomer.phone} /></label><button className="primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'} <span>✓</span></button><button type="button" className="quiet-action" onClick={() => setEditingCustomer(null)}>Cancel</button></form></section>}
           <p className="page-note"><span>◈</span> Customer records are visible only to members of this organization.</p>
         </> : <>
           <div className="page-heading"><div><p className="eyebrow">WORKFLOW</p><h1>{label}</h1><p className="muted">{page === 'jobs' ? 'Jobs begin when your organization accepts a quotation.' : 'Prepare a quote, track its decision, and create a job on acceptance.'}</p></div><span className="count-pill">{visibleQuotes.length} {visibleQuotes.length === 1 ? 'record' : 'records'}</span></div>
           {error && <div className="alert inline-alert">{error}</div>}
           <div className="content-grid"><section className="panel customer-panel"><div className="panel-heading"><div><h2>{page === 'jobs' ? 'Accepted work' : 'Quotation register'}</h2><p>Records for {activeOrg?.name || 'your organization'}</p></div></div>
             {visibleQuotes.length ? <div className="quote-list">{visibleQuotes.map((quote) => <article className="quote-row" key={quote.id}>
-              <div className="quote-top"><div><strong>{quote.customer_name}</strong><span className="quote-id">Quote {quote.id.slice(0, 8).toUpperCase()}</span></div><span className={`quote-status ${quote.status}`}>{quote.status}</span></div>
+              <div className="quote-top"><div><strong>{quote.customer_name}</strong><span className="quote-id">Quote {quote.series_id.slice(0, 8).toUpperCase()} · Revision {quote.revision_number}{!quote.is_current ? ' · historical' : ''}</span></div><span className={`quote-status ${quote.status}`}>{quote.status}</span></div>
               <div className="quote-line">{quote.lines.map((line) => <div key={line.id}>{line.description} · {line.quantity} × {quote.currency} {line.unit_price}</div>)}</div>
               <div className="quote-meta">Valid until {quote.valid_until}{quote.job_id ? ` · Job #${quote.job_id}` : ''}</div>
               {quote.status_history.length > 1 && <details className="quote-history"><summary>View status history</summary>{quote.status_history.map((entry, index) => <div key={`${entry.status}-${index}`}>{entry.status} · {entry.actor} · {new Date(entry.created_at).toLocaleString()}</div>)}</details>}
-              {quote.status === 'draft' && canWriteQuotes && <div className="quote-actions"><button disabled={saving} onClick={() => transition(quote, 'send')}>Send</button></div>}
+              {quote.status === 'draft' && canWriteQuotes && <div className="quote-actions"><button disabled={saving} onClick={() => transition(quote, 'send')}>Send</button><button disabled={saving} onClick={() => startRevision(quote)}>Revise</button></div>}
               {quote.status === 'sent' && <div className="quote-actions">{canAccept && <button className="action-primary" disabled={saving} onClick={() => transition(quote, 'accept')}>Accept & create job</button>}{canWriteQuotes && <><button disabled={saving} onClick={() => transition(quote, 'reject')}>Reject</button><button disabled={saving} onClick={() => transition(quote, 'withdraw')}>Withdraw</button></>}</div>}
+              {quote.status === 'sent' && canWriteQuotes && <div className="quote-actions"><button disabled={saving} onClick={() => startRevision(quote)}>Create revision</button></div>}
             </article>)}</div> : <div className="empty-state"><div className="empty-icon">{page === 'jobs' ? '▦' : '↗'}</div><strong>{page === 'jobs' ? 'No accepted jobs yet' : 'No quotations yet'}</strong><p>{page === 'jobs' ? 'Accepted quotations will appear here as linked jobs.' : 'Create a draft quotation to start this workflow.'}</p></div>}
           </section>
-          {page === 'quotations' && canWriteQuotes && <section className="panel add-panel"><div className="panel-heading"><div><h2>New quotation</h2><p>Start with one service line.</p></div></div><form className="stack-form" onSubmit={addQuotation}>
-            <label>Customer <span className="required">*</span><select name="customer_id" required defaultValue=""><option value="" disabled>Select a customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
-            <div className="field-row"><label>Currency<input name="currency" defaultValue="KES" minLength={3} maxLength={3} required /></label><label>Valid until<input type="date" name="valid_until" min={new Date().toISOString().slice(0, 10)} defaultValue={new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)} required /></label></div>
-            <label>Service description<input name="description" placeholder="e.g. Equipment installation" required /></label>
-            <div className="field-row"><label>Quantity<input type="number" name="quantity" min="0.001" step="0.001" defaultValue="1" required /></label><label>Unit price<input type="number" name="unit_price" min="0" step="0.01" placeholder="0.00" required /></label></div>
-            <p className="form-note">Prices are stored as entered. Tax and quotation totals are not calculated here.</p><button className="primary" disabled={saving || !customers.length}>{saving ? 'Saving…' : 'Save draft'} <span>＋</span></button>
+          {page === 'quotations' && canWriteQuotes && <section className="panel add-panel"><div className="panel-heading"><div><h2>{editingQuote ? `Revise quotation · v${editingQuote.revision_number}` : 'New quotation'}</h2><p>{editingQuote ? 'This creates a new draft revision and preserves this version.' : 'Start with one service line.'}</p></div></div><form key={editingQuote?.id || 'new'} className="stack-form" onSubmit={addQuotation}>
+            <label>Customer <span className="required">*</span><select name="customer_id" required defaultValue={editingQuote?.customer ?? ''}><option value="" disabled>Select a customer</option>{editingQuote && !customers.some((customer) => customer.id === editingQuote.customer) && <option value={editingQuote.customer}>{editingQuote.customer_name} (current customer)</option>}{customers.filter((customer) => customer.status === 'active').map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
+            <div className="field-row"><label>Currency<input name="currency" defaultValue={editingQuote?.currency || 'KES'} minLength={3} maxLength={3} required /></label><label>Valid until<input type="date" name="valid_until" min={new Date().toISOString().slice(0, 10)} defaultValue={editingQuote?.valid_until || new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)} required /></label></div>
+            <div className="quotation-lines">{quoteLines.map((line, index) => <div className="quotation-line-editor" key={index}><label>Service description<input placeholder="e.g. Equipment installation" value={line.description} onChange={(event) => changeQuoteLine(index, 'description', event.target.value)} required /></label><div className="field-row"><label>Quantity<input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => changeQuoteLine(index, 'quantity', event.target.value)} required /></label><label>Unit price<input type="number" min="0" step="0.01" placeholder="0.00" value={line.unit_price} onChange={(event) => changeQuoteLine(index, 'unit_price', event.target.value)} required /></label></div>{quoteLines.length > 1 && <button type="button" className="quiet-action" onClick={() => setQuoteLines((lines) => lines.filter((_, lineIndex) => lineIndex !== index))}>Remove line</button>}</div>)}</div>
+            <button type="button" className="quiet-action" onClick={() => setQuoteLines((lines) => [...lines, { description: '', quantity: '1', unit_price: '' }])}>Add line item</button>
+            <p className="form-note">Prices are stored as entered. Tax and quotation totals are not calculated here.</p><button className="primary" disabled={saving || !customers.some((customer) => customer.status === 'active')}>{saving ? 'Saving…' : editingQuote ? 'Create revision' : 'Save draft'} <span>＋</span></button>
+            {editingQuote && <button type="button" className="quiet-action" onClick={() => { setEditingQuote(null); setQuoteLines([{ description: '', quantity: '1', unit_price: '' }]) }}>Cancel revision</button>}
           </form></section>}</div>
           <p className="page-note"><span>◈</span> Each status change is recorded with the acting team member and time.</p>
         </>}
