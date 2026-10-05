@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v0.3.0 (2026-10-05)
+
+### Bug Fixes
+
+- **ci**: Sync uv lock during semantic release
+  ([#10](https://github.com/Tridim-Technologies/tridim-business/pull/10),
+  [`dce65af`](https://github.com/Tridim-Technologies/tridim-business/commit/dce65afb3e411d470c077297fc73baead783f224))
+
+### Features
+
+- **customers**: Add lifecycle and quotation revisions
+  ([#10](https://github.com/Tridim-Technologies/tridim-business/pull/10),
+  [`dce65af`](https://github.com/Tridim-Technologies/tridim-business/commit/dce65afb3e411d470c077297fc73baead783f224))
+
+
 ## v0.2.0 (2026-10-05)
 
 ### Features
