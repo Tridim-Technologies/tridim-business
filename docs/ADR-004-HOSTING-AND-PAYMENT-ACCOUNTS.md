@@ -10,7 +10,7 @@
 
 ADR-001 keeps Tridim Business as a Django/PostgreSQL modular monolith and explicitly does not require Kubernetes. ADR-003 defines a provider-neutral `PaymentCredentialStore` and requires tenant payment credentials to live in an external secret manager. The project needs a practical hosted reference path without coupling domain logic to one cloud provider.
 
-Flutterwave remains a provisional sandbox candidate in ADR-002. Its public documentation describes server API keys with broad merchant-account access and an aggregator/subaccount payment model. The public material reviewed for this ADR does not establish that an ordinary SaaS platform may let each tenant connect its own independently contracted merchant account through a delegated authorization flow. That commercial and technical permission must not be inferred.
+ADR-002 now selects Safaricom Daraja M-Pesa Express as the provisional sandbox candidate for Kenya-focused tenant invoice collections; Flutterwave is deferred. Daraja's public material describes app credentials, sandbox simulation, callbacks, and live shortcode setup, but does not establish whether a multi-tenant SaaS may connect each tenant's own shortcode under a shared integration. That commercial and technical permission must not be inferred.
 
 ## Decision
 
@@ -29,15 +29,15 @@ For an early synthetic-data environment, a low-cost single-zone database may be 
 
 ## Payment account prerequisite
 
-Do not build or advertise a tenant payment-account connection flow until the provider confirms in writing that the intended model is permitted and specifies the supported connection, merchant onboarding, settlement, disputes, and credential lifecycle requirements.
+Before enabling live tenant collections, obtain written Safaricom confirmation that Tridim Business may connect and operate customer-owned Paybill/Till shortcodes through a multi-tenant SaaS, and confirm the per-tenant authorization, production onboarding, settlement, dispute/reversal, callback registration, and credential lifecycle requirements.
 
-- Do not use Tridim's own API key to collect on behalf of tenants as an assumed substitute for tenant authorization.
-- Do not use Flutterwave split payments/subaccounts as an assumed tenant-owned direct-merchant connection. Public Flutterwave documentation describes this as an aggregator/marketplace arrangement with platform responsibilities.
+- Each business must use its own eligible shortcode and settlement account; do not use Tridim's own shortcode for tenant invoices, pool customer funds, or add payouts to this collection flow.
+- Do not assume that a Daraja developer app or sandbox API credentials authorize live access to multiple tenant merchant shortcodes. Public documentation indicates live activation is associated with a live shortcode and organization-admin/operator setup, but does not settle the SaaS authorization model.
 - Do not store a tenant credential in the ordinary application database, application environment, Kubernetes Secret, or client application. Preserve ADR-003 controls.
-- Continue with manual payment recording and allocation until an approved provider route, onboarding, and operational responsibilities are established.
-- If ordinary tenant-authorized connection is not supported on acceptable terms, evaluate another provider or a different non-custodial payment experience in a separate decision. Do not silently pool funds or create a platform payment account model.
+- Continue with manual payment recording and allocation until Safaricom confirms the live tenant model and each merchant completes its required onboarding.
+- Flutterwave is deferred; reconsider it or another provider for additional markets in a separate decision after checking its account model and terms.
 
-Public documentation reviewed on 6 October 2026 cannot answer provider-specific eligibility or contractual questions. The founder must obtain a written answer from Flutterwave or select another provider before implementation; this ADR does not authorize external contact, production provisioning, live payments, or handling real merchant credentials.
+Public documentation reviewed on 6 October 2026 cannot answer provider-specific eligibility or contractual questions. Written Safaricom confirmation is a prerequisite to live tenant connections; this ADR does not authorize production provisioning, live payments, or handling real merchant credentials.
 
 ## Consequences
 
@@ -52,7 +52,7 @@ Public documentation reviewed on 6 October 2026 cannot answer provider-specific 
 - Measured application traffic or availability needs show Cloud Run is no longer an appropriate fit.
 - A target customer's data-residency, latency, procurement, or hosting requirement rules out the candidate region or provider.
 - Workload measurements and a current estimate show materially better total cost or supportability elsewhere.
-- Flutterwave provides written account-connection terms, or the project selects a different provider.
+- Safaricom confirms the tenant shortcode connection model, or the project selects a different provider for Kenya or other markets.
 - The team has an operational owner and has completed database restore, secret rotation, access review, and incident-response exercises.
 
 ## References
