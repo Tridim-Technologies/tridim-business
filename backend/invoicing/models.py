@@ -105,3 +105,90 @@ class InvoiceLine(models.Model):
                 fields=["invoice", "position"], name="unique_invoice_line_position"
             )
         ]
+
+
+class Payment(models.Model):
+    class Method(models.TextChoices):
+        CASH = "cash", "Cash"
+        BANK_TRANSFER = "bank_transfer", "Bank transfer"
+        CARD = "card", "Card"
+        MOBILE_MONEY = "mobile_money", "Mobile money"
+        CHEQUE = "cheque", "Cheque"
+        OTHER = "other", "Other"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(
+        Organization, on_delete=models.PROTECT, related_name="payments"
+    )
+    customer = models.ForeignKey(
+        Customer, on_delete=models.PROTECT, related_name="payments"
+    )
+    customer_name = models.CharField(max_length=200)
+    received_date = models.DateField()
+    amount = models.DecimalField(max_digits=30, decimal_places=5)
+    currency = models.CharField(max_length=3)
+    method = models.CharField(max_length=20, choices=Method.choices)
+    reference = models.CharField(max_length=120, blank=True)
+    idempotency_key = models.UUIDField(null=True, blank=True)
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="recorded_payments",
+    )
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    reversed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="reversed_payments",
+        null=True,
+        blank=True,
+    )
+    reversed_at = models.DateTimeField(null=True, blank=True)
+    reversal_reason = models.CharField(max_length=240, blank=True)
+
+    class Meta:
+        ordering = ["-received_date", "-recorded_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0), name="payment_amount_positive"
+            ),
+            models.UniqueConstraint(
+                fields=["organization", "idempotency_key"],
+                name="unique_payment_idempotency_per_org",
+            ),
+        ]
+
+
+class PaymentAllocation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    payment = models.ForeignKey(
+        Payment, on_delete=models.PROTECT, related_name="allocations"
+    )
+    invoice = models.ForeignKey(
+        Invoice, on_delete=models.PROTECT, related_name="payment_allocations"
+    )
+    amount = models.DecimalField(max_digits=30, decimal_places=5)
+    allocated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="payment_allocations",
+    )
+    allocated_at = models.DateTimeField(auto_now_add=True)
+    reversed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="reversed_payment_allocations",
+        null=True,
+        blank=True,
+    )
+    reversed_at = models.DateTimeField(null=True, blank=True)
+    reversal_reason = models.CharField(max_length=240, blank=True)
+
+    class Meta:
+        ordering = ["allocated_at", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="payment_allocation_amount_positive",
+            )
+        ]

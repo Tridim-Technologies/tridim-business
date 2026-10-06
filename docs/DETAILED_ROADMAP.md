@@ -2,7 +2,7 @@
 
 **Status:** Founder-directed build sequence; dates and staffing are not committed
 
-**Last updated:** 1 October 2026
+**Last updated:** 6 October 2026
 
 **Product ambition:** Global; Kenya remains a candidate market
 
@@ -28,6 +28,12 @@
 | M5 | Internal alpha readiness | Export, access review, backup/restore, monitoring and operating instructions are reviewed |
 | M6 | Bounded field evaluation readiness | Privacy/security safeguards, support, rollback, baseline and participant agreement are in place before real data |
 | M7 | Repeatability and expansion decision | Installation/support are repeatable; evidence and capacity support the next market or module |
+
+## Current implementation status
+
+- **M0–M2:** Foundation and customer-to-job workflow are implemented in the existing releases.
+- **M3:** Job delivery, invoice issuance, correction history, and owner/finance invoice visibility are complete in v0.5.0.
+- **M4:** In progress under issue #15: manual receipts, same-customer/same-currency allocations, derived balances, and auditable reversals. Provider events, refunds, export, and broader reconciliation remain future work within this milestone.
 
 ## M0 — Repository and decision setup
 

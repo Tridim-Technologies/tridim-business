@@ -1,5 +1,6 @@
 import json
 from decimal import Decimal, localcontext
+from uuid import UUID
 
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch
@@ -9,13 +10,24 @@ from django.views.decorators.http import require_http_methods
 from rest_framework.exceptions import ValidationError
 
 from accounts.models import Membership, Organization
+from customers.models import Customer
 from quotations.models import Job, Quotation, QuotationLine
 
-from .models import Invoice, InvoiceLine, InvoiceSequence
+from .models import (
+    Invoice,
+    InvoiceLine,
+    InvoiceSequence,
+    Payment,
+    PaymentAllocation,
+)
 from .serializers import (
     InvoiceIssueSerializer,
     InvoiceSerializer,
     InvoiceVoidSerializer,
+    PaymentAllocateSerializer,
+    PaymentRecordSerializer,
+    PaymentSerializer,
+    ReversalSerializer,
 )
 
 INVOICE_ROLES = {
@@ -67,8 +79,35 @@ def _invoice_queryset(organization_id):
         .prefetch_related(
             Prefetch("lines", queryset=InvoiceLine.objects.order_by("position", "id"))
         )
+        .prefetch_related(
+            Prefetch(
+                "payment_allocations",
+                queryset=PaymentAllocation.objects.select_related("payment"),
+            )
+        )
         .order_by("-issue_date", "invoice_number")
     )
+
+
+def _payment_queryset(organization_id):
+    return (
+        Payment.objects.filter(organization_id=organization_id)
+        .select_related("customer", "recorded_by", "reversed_by")
+        .prefetch_related(
+            Prefetch(
+                "allocations",
+                queryset=PaymentAllocation.objects.select_related(
+                    "invoice", "allocated_by", "reversed_by"
+                ),
+            )
+        )
+        .order_by("-received_date", "-recorded_at")
+    )
+
+
+def _payment_response(payment, status=200):
+    payment = _payment_queryset(payment.organization_id).get(pk=payment.pk)
+    return JsonResponse(PaymentSerializer(payment).data, status=status)
 
 
 def _invoice_response(invoice, status=200):
@@ -82,6 +121,244 @@ def invoices_view(request, organization_id):
         return error
     invoices = _invoice_queryset(organization_id)
     return JsonResponse({"results": InvoiceSerializer(invoices, many=True).data})
+
+
+@require_http_methods(["GET", "POST"])
+def payments_view(request, organization_id):
+    _, error = _membership(request, organization_id)
+    if error:
+        return error
+    if request.method == "GET":
+        payments = _payment_queryset(organization_id)
+        return JsonResponse({"results": PaymentSerializer(payments, many=True).data})
+
+    raw_key = request.headers.get("Idempotency-Key", "")
+    try:
+        idempotency_key = UUID(raw_key)
+    except (ValueError, TypeError):
+        return JsonResponse(
+            {"detail": "A valid Idempotency-Key UUID header is required."}, status=400
+        )
+    payload, error = _payload(request)
+    if error:
+        return error
+    serializer = PaymentRecordSerializer(data=payload)
+    errors = _validate(serializer)
+    if errors:
+        return JsonResponse(errors, status=400)
+    values = serializer.validated_data
+    with transaction.atomic():
+        organization = (
+            Organization.objects.select_for_update().filter(pk=organization_id).first()
+        )
+        if organization is None:
+            return JsonResponse({"detail": "Organization not found."}, status=404)
+        customer = Customer.objects.filter(
+            organization=organization, pk=values["customer"]
+        ).first()
+        if customer is None:
+            return JsonResponse({"detail": "Customer not found."}, status=404)
+        existing = Payment.objects.filter(
+            organization=organization, idempotency_key=idempotency_key
+        ).first()
+        if existing is not None:
+            same = (
+                existing.customer_id == customer.pk
+                and existing.received_date == values["received_date"]
+                and existing.amount == values["amount"]
+                and existing.currency == values["currency"]
+                and existing.method == values["method"]
+                and existing.reference == values.get("reference", "")
+                and existing.recorded_by_id == request.user.pk
+            )
+            if same:
+                return _payment_response(existing)
+            return JsonResponse(
+                {
+                    "detail": "This Idempotency-Key was already used for another payment."
+                },
+                status=409,
+            )
+        payment = Payment.objects.create(
+            organization=organization,
+            customer=customer,
+            customer_name=customer.name,
+            received_date=values["received_date"],
+            amount=values["amount"],
+            currency=values["currency"],
+            method=values["method"],
+            reference=values.get("reference", ""),
+            idempotency_key=idempotency_key,
+            recorded_by=request.user,
+        )
+    return _payment_response(payment, status=201)
+
+
+@require_http_methods(["POST"])
+def payment_allocate_view(request, organization_id, payment_id):
+    _, error = _membership(request, organization_id)
+    if error:
+        return error
+    payload, error = _payload(request)
+    if error:
+        return error
+    serializer = PaymentAllocateSerializer(data=payload)
+    errors = _validate(serializer)
+    if errors:
+        return JsonResponse(errors, status=400)
+    values = serializer.validated_data
+    with transaction.atomic():
+        organization = (
+            Organization.objects.select_for_update().filter(pk=organization_id).first()
+        )
+        if organization is None:
+            return JsonResponse({"detail": "Organization not found."}, status=404)
+        payment = (
+            Payment.objects.select_for_update()
+            .filter(organization=organization, pk=payment_id)
+            .first()
+        )
+        if payment is None:
+            return JsonResponse({"detail": "Payment not found."}, status=404)
+        invoice = (
+            Invoice.objects.select_for_update()
+            .filter(organization=organization, pk=values["invoice"])
+            .first()
+        )
+        if invoice is None:
+            return JsonResponse({"detail": "Invoice not found."}, status=404)
+        if payment.reversed_at is not None:
+            return JsonResponse(
+                {"detail": "A reversed payment cannot be allocated."}, status=409
+            )
+        if invoice.status != Invoice.Status.ISSUED:
+            return JsonResponse(
+                {"detail": "Only issued invoices can receive allocations."}, status=409
+            )
+        if payment.customer_id != invoice.customer_id:
+            return JsonResponse(
+                {"detail": "Payment and invoice must have the same customer."},
+                status=400,
+            )
+        if payment.currency != invoice.currency:
+            return JsonResponse(
+                {"detail": "Payment and invoice currencies must match."}, status=400
+            )
+        payment_allocated = sum(
+            PaymentAllocation.objects.filter(
+                payment=payment, reversed_at__isnull=True
+            ).values_list("amount", flat=True),
+            Decimal("0"),
+        )
+        invoice_allocated = sum(
+            PaymentAllocation.objects.filter(
+                invoice=invoice,
+                reversed_at__isnull=True,
+                payment__reversed_at__isnull=True,
+            ).values_list("amount", flat=True),
+            Decimal("0"),
+        )
+        amount = values["amount"]
+        if amount > payment.amount - payment_allocated:
+            return JsonResponse(
+                {"detail": "Allocation exceeds the unapplied payment amount."},
+                status=409,
+            )
+        if amount > invoice.total - invoice_allocated:
+            return JsonResponse(
+                {"detail": "Allocation exceeds the invoice outstanding amount."},
+                status=409,
+            )
+        PaymentAllocation.objects.create(
+            payment=payment,
+            invoice=invoice,
+            amount=amount,
+            allocated_by=request.user,
+        )
+    return _payment_response(payment)
+
+
+@require_http_methods(["POST"])
+def payment_allocation_reverse_view(request, organization_id, allocation_id):
+    _, error = _membership(request, organization_id)
+    if error:
+        return error
+    payload, error = _payload(request)
+    if error:
+        return error
+    if set(payload) != {"reason"}:
+        return JsonResponse({"detail": "Provide only the reversal reason."}, status=400)
+    serializer = ReversalSerializer(data=payload)
+    errors = _validate(serializer)
+    if errors:
+        return JsonResponse(errors, status=400)
+    with transaction.atomic():
+        organization = (
+            Organization.objects.select_for_update().filter(pk=organization_id).first()
+        )
+        if organization is None:
+            return JsonResponse({"detail": "Organization not found."}, status=404)
+        allocation = (
+            PaymentAllocation.objects.select_for_update()
+            .select_related("payment")
+            .filter(payment__organization=organization, pk=allocation_id)
+            .first()
+        )
+        if allocation is None:
+            return JsonResponse({"detail": "Allocation not found."}, status=404)
+        if allocation.reversed_at is not None:
+            return JsonResponse(
+                {"detail": "Allocation is already reversed."}, status=409
+            )
+        allocation.reversed_by = request.user
+        allocation.reversed_at = timezone.now()
+        allocation.reversal_reason = serializer.validated_data["reason"]
+        allocation.save(update_fields=["reversed_by", "reversed_at", "reversal_reason"])
+        payment = allocation.payment
+    return _payment_response(payment)
+
+
+@require_http_methods(["POST"])
+def payment_reverse_view(request, organization_id, payment_id):
+    _, error = _membership(request, organization_id)
+    if error:
+        return error
+    payload, error = _payload(request)
+    if error:
+        return error
+    if set(payload) != {"reason"}:
+        return JsonResponse({"detail": "Provide only the reversal reason."}, status=400)
+    serializer = ReversalSerializer(data=payload)
+    errors = _validate(serializer)
+    if errors:
+        return JsonResponse(errors, status=400)
+    with transaction.atomic():
+        organization = (
+            Organization.objects.select_for_update().filter(pk=organization_id).first()
+        )
+        if organization is None:
+            return JsonResponse({"detail": "Organization not found."}, status=404)
+        payment = (
+            Payment.objects.select_for_update()
+            .filter(organization=organization, pk=payment_id)
+            .first()
+        )
+        if payment is None:
+            return JsonResponse({"detail": "Payment not found."}, status=404)
+        if payment.reversed_at is not None:
+            return JsonResponse({"detail": "Payment is already reversed."}, status=409)
+        if PaymentAllocation.objects.filter(
+            payment=payment, reversed_at__isnull=True
+        ).exists():
+            return JsonResponse(
+                {"detail": "Reverse active allocations before reversing this payment."},
+                status=409,
+            )
+        payment.reversed_by = request.user
+        payment.reversed_at = timezone.now()
+        payment.reversal_reason = serializer.validated_data["reason"]
+        payment.save(update_fields=["reversed_by", "reversed_at", "reversal_reason"])
+    return _payment_response(payment)
 
 
 @require_http_methods(["POST"])
@@ -261,14 +538,30 @@ def invoice_void_view(request, organization_id, invoice_id):
     if errors:
         return JsonResponse(errors, status=400)
     with transaction.atomic():
+        organization = (
+            Organization.objects.select_for_update().filter(pk=organization_id).first()
+        )
+        if organization is None:
+            return JsonResponse({"detail": "Organization not found."}, status=404)
         invoice = (
             Invoice.objects.select_for_update()
-            .filter(organization_id=organization_id, id=invoice_id)
+            .filter(organization=organization, id=invoice_id)
             .first()
         )
         if invoice is None:
             return JsonResponse({"detail": "Invoice not found."}, status=404)
         if invoice.status == Invoice.Status.ISSUED:
+            if PaymentAllocation.objects.filter(
+                invoice=invoice,
+                reversed_at__isnull=True,
+                payment__reversed_at__isnull=True,
+            ).exists():
+                return JsonResponse(
+                    {
+                        "detail": "Reverse active payment allocations before voiding this invoice."
+                    },
+                    status=409,
+                )
             invoice.status = Invoice.Status.VOID
             invoice.void_reason = serializer.validated_data["reason"]
             invoice.voided_by = request.user

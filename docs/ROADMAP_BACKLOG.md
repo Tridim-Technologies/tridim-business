@@ -2,7 +2,7 @@
 
 **Status:** Founder-directed starting scope; market fit and production readiness are not validated
 
-**Last updated:** 5 October 2026
+**Last updated:** 6 October 2026
 
 This backlog turns the existing product plan into an implementation sequence. It does not represent customer commitments or a delivery date.
 
@@ -20,7 +20,7 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Create a linked job idempotently when an authorized user accepts a quotation.
 - **Acceptance:** the customer → quote → accepted job path works with audit history and tenant-scoped authorization.
 
-**Implementation progress:** P1 is complete in v0.3.0: customers have auditable active/archived lifecycle and search, quotations have immutable revisions and status history, and accepting the current valid revision creates one tenant-scoped job. Job delivery status, assignments, due dates, and notes shipped in v0.4.0; basic invoicing and receivable visibility are the remaining P2 work.
+**Implementation progress:** P1 is complete in v0.3.0: customers have auditable active/archived lifecycle and search, quotations have immutable revisions and status history, and accepting the current valid revision creates one tenant-scoped job. Job delivery status, assignments, due dates, and notes shipped in v0.4.0.
 
 ## P2 — Delivery to receivable visibility
 
@@ -29,7 +29,7 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Provide owner/finance views for open jobs and issued invoice totals with due dates. Show an outstanding balance only after payment allocations are tracked.
 - **Acceptance:** synthetic scenarios produce explainable job and issued-invoice states; any balance is based on recorded allocations, and the app does not imply full accounting.
 
-**Implementation progress:** Issue #11 shipped auditable job status, assignments, due dates, and delivery notes in v0.4.0. Issue #13 implements an internal invoice register with per-organization annual numbering and void-and-reissue history; tax, payment allocation, and jurisdictional compliance remain out of scope. P2 remains in progress until this invoice and owner/finance visibility slice is merged; payment recording and reconciliation remain in P3.
+**Implementation progress:** P2 is complete in v0.5.0. Issue #11 shipped auditable job status, assignments, due dates, and delivery notes; issue #13 shipped the internal invoice register with per-organization annual numbering, void-and-reissue history, and owner/finance invoice visibility. Tax, payment allocation, and jurisdictional compliance are outside P2.
 
 ## P3 — Payments and reconciliation
 
@@ -37,6 +37,8 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Add idempotent provider events only after a provider route, onboarding needs, and failure recovery are understood.
 - Cover partial, unmatched, duplicated, delayed, reversed, refunded, and overpaid cases.
 - **Acceptance:** balances use exact arithmetic; event retries do not duplicate records; unresolved exceptions are visible and recoverable.
+
+**Implementation progress:** Issue #15 is implementing manual receipts, invoice allocations, derived balances, and auditable correction paths. Provider integrations remain deferred.
 
 ## P4 — Evaluation readiness
 
