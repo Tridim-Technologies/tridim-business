@@ -33,7 +33,7 @@
 
 - **M0–M2:** Foundation and customer-to-job workflow are implemented in the existing releases.
 - **M3:** Job delivery, invoice issuance, correction history, and owner/finance invoice visibility are complete in v0.5.0.
-- **M4:** Manual receipts, same-customer/same-currency allocations, derived balances, and auditable reversals shipped in v0.6.0 through issue #15. Issue #19 adds finance exports for external review; provider events, refunds, automated matching, and broader reconciliation remain future work.
+- **M4:** Manual receipts, same-customer/same-currency allocations, derived balances, and auditable reversals shipped in v0.6.0 through issue #15. Issue #19 shipped finance CSV exports for external review in v0.7.0; provider events, refunds, automated matching, and broader reconciliation remain future work.
 
 ## M0 — Repository and decision setup
 

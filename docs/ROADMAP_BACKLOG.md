@@ -38,7 +38,7 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Cover partial, unmatched, duplicated, delayed, reversed, refunded, and overpaid cases.
 - **Acceptance:** balances use exact arithmetic; event retries do not duplicate records; unresolved exceptions are visible and recoverable.
 
-**Implementation progress:** Issue #15 shipped manual receipts, same-customer/same-currency invoice allocations, derived balances, and auditable reversal paths in v0.6.0. Issue #19 adds tenant-scoped exports that preserve unmatched and reversed states for external review. Provider integrations and automated matching remain deferred.
+**Implementation progress:** Issue #15 shipped manual receipts, same-customer/same-currency invoice allocations, derived balances, and auditable reversal paths in v0.6.0. Issue #19 shipped tenant-scoped finance CSV exports that preserve unmatched and reversed states in v0.7.0. Provider integrations and automated matching remain deferred.
 
 ## P4 — Evaluation readiness
 
