@@ -16,7 +16,15 @@ from quotations.job_views import (
     job_note_create_view,
     jobs_view,
 )
-from invoicing.views import invoice_issue_view, invoice_void_view, invoices_view
+from invoicing.views import (
+    invoice_issue_view,
+    invoice_void_view,
+    invoices_view,
+    payment_allocate_view,
+    payment_allocation_reverse_view,
+    payment_reverse_view,
+    payments_view,
+)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -92,5 +100,25 @@ urlpatterns = [
         "api/organizations/<uuid:organization_id>/invoices/<uuid:invoice_id>/void/",
         invoice_void_view,
         name="invoice-void",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/payments/",
+        payments_view,
+        name="payments",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/payments/<uuid:payment_id>/allocate/",
+        payment_allocate_view,
+        name="payment-allocate",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/payments/<uuid:payment_id>/reverse/",
+        payment_reverse_view,
+        name="payment-reverse",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/payment-allocations/<uuid:allocation_id>/reverse/",
+        payment_allocation_reverse_view,
+        name="payment-allocation-reverse",
     ),
 ]

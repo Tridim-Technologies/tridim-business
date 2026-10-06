@@ -1,7 +1,7 @@
 # MVP Requirements
 
 **Status:** Draft scope for validation and prototype; not an implementation commitment  
-**Last updated:** 1 October 2026
+**Last updated:** 6 October 2026
 
 ## Product boundary
 
@@ -53,9 +53,13 @@ These are starting profiles, not substitutes for organization-scoped policy. Eac
 - Finance creates an invoice from an accepted quotation/job, retaining links and preventing unintended duplicate invoices.
 - Issued invoices have clear state, unique numbering policy, due date, currency, totals and audit history.
 - Initial internal invoice numbering uses a per-organization calendar-year sequence; voided numbers remain reserved. Until organizations have a timezone setting, the calendar year follows the application timezone (currently UTC). This internal default does not claim to meet jurisdiction-specific numbering rules.
-- Internal invoice totals preserve exact quantity × unit-price products to five decimal places; currency-specific rounding must be defined before customer-facing invoice documents or payment allocation.
+- Internal invoice totals preserve exact quantity × unit-price products to five decimal places; internal allocations compare amounts at that precision. Currency-specific rounding must be defined before customer-facing invoice documents or provider integrations.
 - Changes after issue use controlled cancellation, credit-note or adjustment flows rather than silent edits.
 - A payment can be recorded manually or imported through a verified provider route; it can be allocated subject to explicit rules.
+- A manual receipt records customer, date received, positive amount, three-letter currency, method, optional reference, actor, and timestamp. A client idempotency key prevents retry duplicates.
+- Payment and allocation values use exact decimal arithmetic to five places in this internal workflow. Payment and invoice currencies must match; currency-specific rounding and settlement behavior must be defined before customer-facing financial documents or provider integrations.
+- Allocations may be partial and may cover multiple invoices for the same organization and customer. Active allocations cannot exceed the unapplied payment amount or the invoice's outstanding amount. An overpayment remains unapplied until it can be explicitly allocated.
+- Reversals require a reason and retain the actor and timestamp. Active allocations must be reversed before a payment can be reversed or an invoice can be voided; reversals do not delete the original receipt or allocation.
 - Repeated delivery of the same provider event cannot create a second payment or allocation. Event and processing result are traceable.
 - Partial, over-, delayed, reversed, refunded, unmatched and disputed payments have distinct states or exception records.
 - Unmatched receipts remain visible and do not reduce receivables until allocated.

@@ -17,11 +17,18 @@ type Job = {
   notes: { id: number; author: string; content: string; created_at: string }[]; created_at: string
 }
 type Invoice = {
-  id: string; invoice_number: string; job_id: number; customer_name: string; source_quotation_id: string
+  id: string; invoice_number: string; job_id: number; customer_id: number; customer_name: string; source_quotation_id: string
   status: 'issued' | 'void'; issue_date: string; due_date: string; currency: string; total: string
+  allocated_total: string; outstanding_total: string; payment_state: 'unpaid' | 'partial' | 'paid' | 'void'
   issued_by: string; issued_at: string; correction_reason: string; void_reason: string; voided_by: string | null; voided_at: string | null
   replaces_invoice_number: string | null
   lines: { description: string; quantity: string; unit_price: string; line_total: string; position: number }[]
+}
+type Payment = {
+  id: string; customer: number; customer_name: string; received_date: string; amount: string; currency: string
+  method: string; reference: string; recorded_by: string; recorded_at: string; allocated_total: string; unapplied_total: string
+  reversed_by: string | null; reversed_at: string | null; reversal_reason: string
+  allocations: { id: string; invoice: string; invoice_number: string; amount: string; reversed_by: string | null; reversal_reason: string }[]
 }
 type Session = { authenticated: boolean; user?: { id: number; username: string }; organizations?: Organization[] }
 
@@ -29,6 +36,10 @@ function dateInputValue(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${date.getFullYear()}-${month}-${day}`
+}
+
+function decimalIsPositive(value: string): boolean {
+  return /[1-9]/.test(value)
 }
 
 function latestVoidedInvoice(invoices: Invoice[], jobId: number): Invoice | undefined {
@@ -59,6 +70,9 @@ export default function App() {
   const [quotations, setQuotations] = useState<Quote[]>([])
   const [jobs, setJobs] = useState<Job[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [payments, setPayments] = useState<Payment[]>([])
+  const [financeCustomers, setFinanceCustomers] = useState<Customer[]>([])
+  const [paymentRequestKey, setPaymentRequestKey] = useState(() => crypto.randomUUID())
   const [customerStatus, setCustomerStatus] = useState<'active' | 'archived' | 'all'>('active')
   const [customerSearch, setCustomerSearch] = useState('')
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
@@ -81,13 +95,15 @@ export default function App() {
 
   const refreshData = useCallback(async () => {
     if (!organization) return
-    const [customerData, quoteData, jobData, invoiceData] = await Promise.all([
+    const [customerData, quoteData, jobData, invoiceData, paymentData, financeCustomerData] = await Promise.all([
       api<{ results: Customer[] }>(`/api/organizations/${organization}/customers/?status=${customerStatus}&search=${encodeURIComponent(customerSearch)}`),
       api<{ results: Quote[] }>(`/api/organizations/${organization}/quotations/`),
       api<{ results: Job[] }>(`/api/organizations/${organization}/jobs/`),
       canViewInvoices ? api<{ results: Invoice[] }>(`/api/organizations/${organization}/invoices/`) : Promise.resolve({ results: [] as Invoice[] }),
+      canViewInvoices ? api<{ results: Payment[] }>(`/api/organizations/${organization}/payments/`) : Promise.resolve({ results: [] as Payment[] }),
+      canViewInvoices ? api<{ results: Customer[] }>(`/api/organizations/${organization}/customers/?status=all`) : Promise.resolve({ results: [] as Customer[] }),
     ])
-    setCustomers(customerData.results); setQuotations(quoteData.results); setJobs(jobData.results); setInvoices(invoiceData.results); setError('')
+    setCustomers(customerData.results); setQuotations(quoteData.results); setJobs(jobData.results); setInvoices(invoiceData.results); setPayments(paymentData.results); setFinanceCustomers(financeCustomerData.results); setError('')
   }, [organization, customerStatus, customerSearch, canViewInvoices])
 
   useEffect(() => { refreshSession().catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false)) }, [])
@@ -212,6 +228,47 @@ export default function App() {
     } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
   }
 
+  async function recordPayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setError(''); setSaving(true)
+    const formElement = event.currentTarget; const form = new FormData(formElement)
+    try {
+      await api(`/api/organizations/${organization}/payments/`, {
+        method: 'POST', headers: { ...csrfHeader(), 'Idempotency-Key': paymentRequestKey },
+        body: JSON.stringify({ customer: Number(form.get('customer')), received_date: form.get('received_date'), amount: form.get('amount'), currency: form.get('currency'), method: form.get('method'), reference: form.get('reference') }),
+      })
+      formElement.reset(); setPaymentRequestKey(crypto.randomUUID()); await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function allocatePayment(event: FormEvent<HTMLFormElement>, payment: Payment) {
+    event.preventDefault(); setError(''); setSaving(true)
+    const formElement = event.currentTarget; const form = new FormData(formElement)
+    try {
+      await api(`/api/organizations/${organization}/payments/${payment.id}/allocate/`, { method: 'POST', headers: csrfHeader(), body: JSON.stringify({ invoice: form.get('invoice'), amount: form.get('amount') }) })
+      formElement.reset(); await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function reverseAllocation(allocationId: string) {
+    const reason = window.prompt('Reason for reversing this allocation')
+    if (!reason?.trim()) return
+    setError(''); setSaving(true)
+    try {
+      await api(`/api/organizations/${organization}/payment-allocations/${allocationId}/reverse/`, { method: 'POST', headers: csrfHeader(), body: JSON.stringify({ reason }) })
+      await refreshData()
+    } catch (failure) { setError((failure as Error).message) } finally { setSaving(false) }
+  }
+
+  async function reversePayment(payment: Payment) {
+    const reason = window.prompt('Reason for reversing this payment')
+    if (!reason?.trim()) return
+    setError(''); setSaving(true)
+    try {
+      await api(`/api/organizations/${organization}/payments/${payment.id}/reverse/`, { method: 'POST', headers: csrfHeader(), body: JSON.stringify({ reason }) })
+      await refreshData()
+    } catch (failure) { setError((failure as Error).message) } finally { setSaving(false) }
+  }
+
   async function updateCustomer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!editingCustomer) return
@@ -236,7 +293,7 @@ export default function App() {
 
   async function signOut() {
     await api('/api/session/', { method: 'DELETE', headers: csrfHeader() })
-    setSession({ authenticated: false }); setCustomers([]); setQuotations([]); setJobs([]); setInvoices([])
+    setSession({ authenticated: false }); setCustomers([]); setQuotations([]); setJobs([]); setInvoices([]); setPayments([]); setFinanceCustomers([])
   }
 
   if (loading) return <main className="loading">Loading your workspace…</main>
@@ -280,17 +337,43 @@ export default function App() {
         </> : page === 'invoices' ? <>
           <div className="page-heading"><div><p className="eyebrow">FINANCE</p><h1>Invoices</h1><p className="muted">Internal records issued from completed jobs. Payments and tax are not tracked here.</p></div><span className="count-pill">{invoices.length} {invoices.length === 1 ? 'invoice' : 'invoices'}</span></div>
           {error && <div className="alert inline-alert">{error}</div>}
-          <section className="panel invoice-register"><div className="panel-heading"><div><h2>Invoice register</h2><p>Issued totals are shown in their source currency; payment allocations are not recorded.</p></div></div>
+          <section className="panel add-panel"><div className="panel-heading"><div><h2>Record a payment</h2><p>Enter a receipt confirmed outside this app. Unallocated amounts remain visible.</p></div></div>
+            <form className="payment-form" onSubmit={recordPayment}>
+              <label>Customer<select name="customer" required defaultValue=""><option value="" disabled>Select customer</option>{financeCustomers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}{customer.status === 'archived' ? ' · archived' : ''}</option>)}</select></label>
+              <label>Received date<input type="date" name="received_date" defaultValue={dateInputValue(new Date())} required /></label>
+              <label>Amount<input type="number" name="amount" min="0.00001" step="0.00001" required /></label>
+              <label>Currency<input name="currency" maxLength={3} minLength={3} pattern="[A-Z]{3}" placeholder="KES" required /></label>
+              <label>Method<select name="method" required defaultValue="cash"><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="card">Card</option><option value="mobile_money">Mobile money</option><option value="cheque">Cheque</option><option value="other">Other</option></select></label>
+              <label>Reference (optional)<input name="reference" maxLength={120} /></label>
+              <button className="primary" disabled={saving || !financeCustomers.length}>{saving ? 'Saving…' : 'Record payment'} <span>＋</span></button>
+            </form>
+          </section>
+          <section className="panel invoice-register"><div className="panel-heading"><div><h2>Invoice register</h2><p>Balances use active allocations and the invoice's source currency. These are operational receivables, not accounting balances.</p></div></div>
             {invoices.length ? <div className="invoice-list">{invoices.map((invoice) => <article className="invoice-card" key={invoice.id}>
               <div className="invoice-top"><div><strong>{invoice.invoice_number}</strong><span className="quote-id">{invoice.customer_name} · Job #{invoice.job_id}{invoice.replaces_invoice_number ? ` · Replaces ${invoice.replaces_invoice_number}` : ''}</span></div><span className={`quote-status ${invoice.status}`}>{invoice.status}</span></div>
-              <div className="invoice-facts"><span>Issued {invoice.issue_date}</span><span>Due {invoice.due_date}</span><strong>{invoice.currency} {invoice.total}</strong></div>
+              <div className="invoice-facts"><span>Issued {invoice.issue_date}</span><span>Due {invoice.due_date}</span><span className={`quote-status ${invoice.payment_state}`}>{invoice.payment_state}</span><strong>Issued {invoice.currency} {invoice.total}</strong></div>
+              {invoice.status === 'issued' && <div className="invoice-balance"><span>Allocated {invoice.currency} {invoice.allocated_total}</span><strong>Outstanding {invoice.currency} {invoice.outstanding_total}</strong></div>}
               <div className="invoice-lines">{invoice.lines.map((line) => <div key={line.position}><span>{line.description} · {line.quantity} × {invoice.currency} {line.unit_price}</span><strong>{invoice.currency} {line.line_total}</strong></div>)}</div>
               {invoice.correction_reason && <p className="invoice-correction-note">Replacement reason: {invoice.correction_reason}</p>}
               {invoice.status === 'void' && <p className="invoice-void-note">Voided by {invoice.voided_by} · {invoice.voided_at ? new Date(invoice.voided_at).toLocaleString() : ''} · {invoice.void_reason}</p>}
-              {invoice.status === 'issued' && <details className="invoice-void"><summary>Correct this invoice</summary><p>Voiding keeps this number and record. You can then issue a replacement from the completed job.</p><form className="job-inline-form" onSubmit={(event) => voidInvoice(event, invoice)}><input name="reason" maxLength={240} placeholder="Reason for correction" aria-label={`Reason for voiding ${invoice.invoice_number}`} required /><button className="quiet-action" disabled={saving}>Void invoice</button></form></details>}
+              {invoice.status === 'issued' && <details className="invoice-void"><summary>Correct this invoice</summary><p>Voiding keeps this number and record. Reverse its active payment allocations first, then issue a replacement from the completed job.</p><form className="job-inline-form" onSubmit={(event) => voidInvoice(event, invoice)}><input name="reason" maxLength={240} placeholder="Reason for correction" aria-label={`Reason for voiding ${invoice.invoice_number}`} required /><button className="quiet-action" disabled={saving || decimalIsPositive(invoice.allocated_total)}>Void invoice</button></form></details>}
             </article>)}</div> : <div className="empty-state"><div className="empty-icon">▤</div><strong>No invoices issued</strong><p>Complete a job, then issue an invoice from its job card.</p></div>}
           </section>
-          <p className="page-note"><span>◈</span> Invoice totals copy the accepted quotation. Taxes and payments are not included.</p>
+          <section className="panel payment-register"><div className="panel-heading"><div><h2>Payment receipts</h2><p>Manual receipt records stay visible after reversal. Each receipt can be allocated across matching invoices.</p></div></div>
+            {payments.length ? <div className="payment-list">{payments.map((payment) => {
+              const activeAllocations = payment.allocations.filter((allocation) => !allocation.reversed_by)
+              const eligibleInvoices = invoices.filter((invoice) => invoice.status === 'issued' && invoice.customer_id === payment.customer && invoice.currency === payment.currency && decimalIsPositive(invoice.outstanding_total))
+              return <article className="payment-card" key={payment.id}>
+                <div className="invoice-top"><div><strong>{payment.customer_name}</strong><span className="quote-id">Received {payment.received_date} · {payment.method.replace('_', ' ')}{payment.reference ? ` · Ref ${payment.reference}` : ''} · recorded by {payment.recorded_by}</span></div><span className={`quote-status ${payment.reversed_at ? 'void' : 'issued'}`}>{payment.reversed_at ? 'reversed' : 'active'}</span></div>
+                <div className="invoice-facts"><span>{payment.currency} {payment.amount}</span><span>Allocated {payment.currency} {payment.allocated_total}</span><strong>Unapplied {payment.currency} {payment.unapplied_total}</strong></div>
+                {activeAllocations.map((allocation) => <div className="allocation-row" key={allocation.id}><span>{allocation.invoice_number} · {payment.currency} {allocation.amount}</span><button className="quiet-action" disabled={saving || Boolean(payment.reversed_at)} onClick={() => reverseAllocation(allocation.id)}>Reverse allocation</button></div>)}
+                {payment.allocations.filter((allocation) => allocation.reversed_by).map((allocation) => <p className="invoice-void-note" key={allocation.id}>Reversed allocation {allocation.invoice_number} · {allocation.reversal_reason}</p>)}
+                {!payment.reversed_at && decimalIsPositive(payment.unapplied_total) && <form className="job-inline-form" onSubmit={(event) => allocatePayment(event, payment)}><select name="invoice" aria-label="Invoice to allocate payment to" required defaultValue=""><option value="" disabled>Select matching invoice</option>{eligibleInvoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.invoice_number} · outstanding {payment.currency} {invoice.outstanding_total}</option>)}</select><input name="amount" type="number" min="0.00001" step="0.00001" max={payment.unapplied_total} placeholder={`Amount (up to ${payment.unapplied_total})`} aria-label="Allocation amount" required /><button className="quiet-action" disabled={saving || !eligibleInvoices.length}>Allocate</button></form>}
+                {payment.reversed_at ? <p className="invoice-void-note">Reversed by {payment.reversed_by} · {payment.reversal_reason}</p> : activeAllocations.length === 0 && <button className="quiet-action" disabled={saving} onClick={() => reversePayment(payment)}>Reverse payment</button>}
+              </article>
+            })}</div> : <div className="empty-state"><div className="empty-icon">◉</div><strong>No payments recorded</strong><p>Record a confirmed receipt above, then allocate it to an issued invoice.</p></div>}
+          </section>
+          <p className="page-note"><span>◈</span> Receivables are calculated from issued invoices and active manual allocations. Tax, external settlement, credits, and full accounting are not included.</p>
         </> : page === 'jobs' ? <>
           <div className="page-heading"><div><p className="eyebrow">DELIVERY</p><h1>Jobs</h1><p className="muted">Track delivery progress for work created from accepted quotations.</p></div><span className="count-pill">{jobs.length} {jobs.length === 1 ? 'job' : 'jobs'}</span></div>
           {error && <div className="alert inline-alert">{error}</div>}
