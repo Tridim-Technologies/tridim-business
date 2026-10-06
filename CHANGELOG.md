@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.5.0 (2026-10-06)
+
+### Features
+
+- **invoicing**: Add scoped invoice register
+  ([#14](https://github.com/Tridim-Technologies/tridim-business/pull/14),
+  [`7f5bc5f`](https://github.com/Tridim-Technologies/tridim-business/commit/7f5bc5ff41b14b436a7fa25fb8c54862f157d282))
+
+
 ## v0.4.0 (2026-10-05)
 
 ### Features
