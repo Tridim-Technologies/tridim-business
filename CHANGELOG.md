@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.6.0 (2026-10-06)
+
+### Features
+
+- **payments**: Record and allocate manual receipts
+  ([#16](https://github.com/Tridim-Technologies/tridim-business/pull/16),
+  [`f41607f`](https://github.com/Tridim-Technologies/tridim-business/commit/f41607f76c933377f9353af3ee57dfc0b245fba4))
+
+
 ## v0.5.0 (2026-10-06)
 
 ### Features
