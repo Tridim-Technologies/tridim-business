@@ -1,10 +1,12 @@
+import csv
 import json
+from datetime import UTC
 from decimal import Decimal, localcontext
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from rest_framework.exceptions import ValidationError
@@ -121,6 +123,273 @@ def invoices_view(request, organization_id):
         return error
     invoices = _invoice_queryset(organization_id)
     return JsonResponse({"results": InvoiceSerializer(invoices, many=True).data})
+
+
+class _CsvBuffer:
+    def write(self, value):
+        return value
+
+
+def _csv_text(value):
+    if not isinstance(value, str):
+        return value
+    if value.lstrip(" \t\r\n").startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return value
+
+
+def _csv_decimal(value):
+    return format(value, ".5f")
+
+
+def _csv_timestamp(value):
+    return value.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _csv_response(filename, headers, rows, as_of, definitions):
+    def stream():
+        buffer = _CsvBuffer()
+        writer = csv.writer(buffer, lineterminator="\r\n")
+        yield "\ufeff"
+        yield writer.writerow(["# export_as_of_utc", as_of])
+        yield writer.writerow(["# definitions", definitions])
+        yield writer.writerow([*headers, "export_as_of_utc"])
+        for row in rows:
+            yield writer.writerow([*row, as_of])
+
+    response = StreamingHttpResponse(stream(), content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Export-As-Of-UTC"] = as_of
+    return response
+
+
+@require_http_methods(["GET"])
+def finance_export_view(request, organization_id, resource):
+    _, error = _membership(request, organization_id)
+    if error:
+        return error
+    as_of = _csv_timestamp(timezone.now())
+    if resource == "invoices":
+
+        def invoice_rows():
+            for invoice in _invoice_queryset(organization_id).iterator(chunk_size=500):
+                allocated = sum(
+                    (
+                        allocation.amount
+                        for allocation in invoice.payment_allocations.all()
+                        if allocation.reversed_at is None
+                        and allocation.payment.reversed_at is None
+                    ),
+                    Decimal("0.00000"),
+                )
+                outstanding = (
+                    invoice.total - allocated
+                    if invoice.status == Invoice.Status.ISSUED
+                    else ""
+                )
+                state = (
+                    "void"
+                    if invoice.status == Invoice.Status.VOID
+                    else (
+                        "paid"
+                        if outstanding == 0
+                        else "partial"
+                        if allocated > 0
+                        else "unpaid"
+                    )
+                )
+                yield (
+                    str(invoice.id),
+                    _csv_text(invoice.invoice_number),
+                    invoice.customer_id,
+                    _csv_text(invoice.customer_name),
+                    invoice.job_id,
+                    invoice.status,
+                    invoice.issue_date.isoformat(),
+                    invoice.due_date.isoformat(),
+                    invoice.currency,
+                    _csv_decimal(invoice.total),
+                    _csv_decimal(allocated),
+                    _csv_decimal(outstanding) if outstanding != "" else "",
+                    state,
+                    _csv_text(invoice.issued_by.get_username()),
+                    _csv_timestamp(invoice.issued_at),
+                    _csv_text(invoice.void_reason),
+                    _csv_text(invoice.voided_by.get_username())
+                    if invoice.voided_by
+                    else "",
+                    _csv_timestamp(invoice.voided_at) if invoice.voided_at else "",
+                )
+
+        return _csv_response(
+            "invoices.csv",
+            (
+                "invoice_id",
+                "invoice_number",
+                "customer_id",
+                "customer_name",
+                "job_id",
+                "invoice_status",
+                "issue_date",
+                "due_date",
+                "currency",
+                "issued_total",
+                "allocated_total",
+                "outstanding_total",
+                "payment_state",
+                "issued_by",
+                "issued_at_utc",
+                "void_reason",
+                "voided_by",
+                "voided_at_utc",
+            ),
+            invoice_rows(),
+            as_of,
+            "issued_total is the recorded invoice total; allocated_total sums active allocations; "
+            "outstanding_total is issued_total minus active allocations for issued invoices only. "
+            "Voided invoices have no outstanding balance.",
+        )
+    if resource == "payments":
+
+        def payment_rows():
+            for payment in _payment_queryset(organization_id).iterator(chunk_size=500):
+                allocations = [
+                    allocation
+                    for allocation in payment.allocations.all()
+                    if allocation.reversed_at is None
+                ]
+                allocated = (
+                    sum((item.amount for item in allocations), Decimal("0.00000"))
+                    if payment.reversed_at is None
+                    else Decimal("0.00000")
+                )
+                unapplied = (
+                    payment.amount - allocated
+                    if payment.reversed_at is None
+                    else Decimal("0.00000")
+                )
+                state = (
+                    "reversed"
+                    if payment.reversed_at
+                    else "unapplied"
+                    if allocated == 0
+                    else "applied"
+                    if unapplied == 0
+                    else "partially_applied"
+                )
+                yield (
+                    str(payment.id),
+                    payment.customer_id,
+                    _csv_text(payment.customer_name),
+                    payment.received_date.isoformat(),
+                    _csv_decimal(payment.amount),
+                    payment.currency,
+                    payment.method,
+                    _csv_text(payment.reference),
+                    state,
+                    _csv_decimal(allocated),
+                    _csv_decimal(unapplied),
+                    _csv_text(payment.recorded_by.get_username()),
+                    _csv_timestamp(payment.recorded_at),
+                    _csv_text(payment.reversal_reason),
+                    _csv_text(payment.reversed_by.get_username())
+                    if payment.reversed_by
+                    else "",
+                    _csv_timestamp(payment.reversed_at) if payment.reversed_at else "",
+                )
+
+        return _csv_response(
+            "payments.csv",
+            (
+                "payment_id",
+                "customer_id",
+                "customer_name",
+                "received_date",
+                "amount",
+                "currency",
+                "method",
+                "reference",
+                "payment_state",
+                "allocated_total",
+                "unapplied_total",
+                "recorded_by",
+                "recorded_at_utc",
+                "reversal_reason",
+                "reversed_by",
+                "reversed_at_utc",
+            ),
+            payment_rows(),
+            as_of,
+            "allocated_total sums active allocations unless the payment is reversed; unapplied_total "
+            "is amount minus allocated_total for active receipts and zero for reversed receipts. "
+            "payment_state distinguishes unapplied, partially_applied, applied, and reversed.",
+        )
+    if resource == "allocations":
+
+        def allocation_rows():
+            allocations = (
+                PaymentAllocation.objects.filter(
+                    payment__organization_id=organization_id
+                )
+                .select_related(
+                    "payment",
+                    "payment__customer",
+                    "payment__reversed_by",
+                    "invoice",
+                    "allocated_by",
+                    "reversed_by",
+                )
+                .order_by("allocated_at", "id")
+            )
+            for allocation in allocations.iterator(chunk_size=500):
+                yield (
+                    str(allocation.id),
+                    str(allocation.payment_id),
+                    str(allocation.invoice_id),
+                    _csv_text(allocation.invoice.invoice_number),
+                    allocation.payment.customer_id,
+                    _csv_text(allocation.payment.customer_name),
+                    _csv_decimal(allocation.amount),
+                    allocation.payment.currency,
+                    _csv_text(allocation.allocated_by.get_username()),
+                    _csv_timestamp(allocation.allocated_at),
+                    "reversed" if allocation.reversed_at else "active",
+                    _csv_text(allocation.reversal_reason),
+                    _csv_text(allocation.reversed_by.get_username())
+                    if allocation.reversed_by
+                    else "",
+                    _csv_timestamp(allocation.reversed_at)
+                    if allocation.reversed_at
+                    else "",
+                    "reversed" if allocation.payment.reversed_at else "active",
+                )
+
+        return _csv_response(
+            "payment-allocations.csv",
+            (
+                "allocation_id",
+                "payment_id",
+                "invoice_id",
+                "invoice_number",
+                "customer_id",
+                "customer_name",
+                "amount",
+                "currency",
+                "allocated_by",
+                "allocated_at_utc",
+                "allocation_state",
+                "reversal_reason",
+                "reversed_by",
+                "reversed_at_utc",
+                "payment_state",
+            ),
+            allocation_rows(),
+            as_of,
+            "Every allocation is retained; allocation_state indicates active or reversed, and "
+            "payment_state independently indicates whether its receipt is active or reversed.",
+        )
+    return JsonResponse({"detail": "Unknown finance export."}, status=404)
 
 
 @require_http_methods(["GET", "POST"])

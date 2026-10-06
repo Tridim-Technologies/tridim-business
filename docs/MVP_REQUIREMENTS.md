@@ -70,6 +70,7 @@ These are starting profiles, not substitutes for organization-scoped policy. Eac
 - Owner sees jobs by agreed status and outstanding receivables with a documented definition.
 - Do not label an issued invoice total as outstanding until recorded payments, credits and adjustments are applied under explicit allocation rules.
 - Finance exports invoice, payment, allocation and reconciliation records in a documented format.
+- The current CSV export format and its balance/state definitions are documented in `FINANCE_EXPORTS.md`.
 - Reports show currency, date range, as-of time and definitions. Do not label invoice totals as recognized revenue without an accounting policy.
 - Exports enforce the same tenant and role restrictions as the application.
 
