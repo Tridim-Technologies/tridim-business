@@ -38,7 +38,7 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Cover partial, unmatched, duplicated, delayed, reversed, refunded, and overpaid cases.
 - **Acceptance:** balances use exact arithmetic; event retries do not duplicate records; unresolved exceptions are visible and recoverable.
 
-**Implementation progress:** Issue #15 is implementing manual receipts, invoice allocations, derived balances, and auditable correction paths. Provider integrations remain deferred.
+**Implementation progress:** Issue #15 shipped manual receipts, same-customer/same-currency invoice allocations, derived balances, and auditable reversal paths in v0.6.0. Provider integrations and broader delayed/refunded exception handling remain future work in P3.
 
 ## P4 — Evaluation readiness
 
