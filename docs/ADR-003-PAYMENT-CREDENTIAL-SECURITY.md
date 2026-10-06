@@ -1,6 +1,6 @@
 # ADR-003: Tenant payment-account credentials
 
-**Status:** Accepted for design and sandbox boundaries; production storage vendor and deployment are undecided
+**Status:** Accepted for design and sandbox boundaries; see ADR-004 for the initial hosted reference path; production rollout remains subject to readiness review
 
 **Date:** 6 October 2026
 
@@ -8,9 +8,9 @@
 
 ## Context
 
-ADR-002 names Flutterwave as a provisional sandbox candidate, subject to confirming that customer businesses can use their own accounts with this SaaS. No hosting provider or deployment topology has been chosen; Kubernetes is only a possible target. Provider secret keys are bearer credentials: exposure can permit payment actions under the merchant account.
+ADR-002 names Flutterwave as a provisional sandbox candidate, subject to confirming that customer businesses can use their own accounts with this SaaS. ADR-004 recommends a Kubernetes-optional managed container deployment as the initial hosted reference path; the chosen production region and rollout configuration remain subject to readiness review. Provider secret keys are bearer credentials: exposure can permit payment actions under the merchant account.
 
-This decision covers the product's handling of tenant-specific payment-provider credentials. It does not select a hosting vendor, secret-manager product, customer identity-verification process, or provider account-connection mechanism.
+This decision covers the product's handling of tenant-specific payment-provider credentials. ADR-004 recommends an initial hosted path, but this ADR does not finalize production provisioning or select a customer identity-verification process or provider account-connection mechanism.
 
 ## Assets and trust boundaries
 
@@ -27,7 +27,7 @@ Define a provider-neutral `PaymentCredentialStore` boundary. In a production mul
 
 Only the backend payment-processing component may resolve a credential, and only after it has loaded and authorized the provider connection through the attempt's organization. The client never receives the credential or reference. The reference is generated and bound by the server; API callers cannot choose or substitute it. Resolve credentials just in time, keep plaintext in memory only for the provider request, and never write it to logs, traces, error messages, analytics, exports, or cache. The payment component's external identity must have the narrowest available read access; record secret access in the secret manager's audit trail.
 
-This boundary is vendor-neutral. Select the concrete manager and workload identity only after hosting and operational ownership are chosen. If the selected service cannot provide protected storage, authenticated workload access, access auditing, revocation, and a recoverable rotation process, provider-account connection remains disabled.
+This boundary is vendor-neutral. ADR-004 recommends Google Cloud Secret Manager with Cloud Run workload identity for the initial hosted reference deployment. Keep the adapter vendor-neutral; confirm production ownership, permissions, region, and recovery before enabling credentials. If the selected service cannot provide protected storage, authenticated workload access, access auditing, revocation, and a recoverable rotation process, provider-account connection remains disabled.
 
 ## Connection lifecycle
 
@@ -74,7 +74,7 @@ Back up non-secret connection metadata and separately document the secret manage
 
 - A separate external manager supports independent lifecycle and access auditing and avoids placing merchant keys in the general business database. It adds operational cost, service dependency, and recovery work.
 - No exact authorization flow can be implemented until Flutterwave confirms the supported account connection model and terms for this product. Do not assume OAuth, delegated accounts, or subaccounts are available.
-- Hosting provider, external secret-manager product, workload identity, secret retention/deletion guarantees, operational owners, and production recovery objectives remain undecided.
+- Production provisioning, final region and sizing, secret retention/deletion guarantees, operational owners, and recovery objectives remain open; ADR-004 records the recommended initial hosted reference path.
 - Before provider implementation, create a separate issue for the chosen account connection flow and production secret-store adapter; include database-reference integrity, permission tests, log redaction tests, rotation/revocation drills, and sandbox-only endpoint enforcement.
 - This ADR does not authorize live payments, storing real merchant credentials, using a Tridim-owned merchant account, pooling funds, or production deployment.
 
