@@ -192,3 +192,78 @@ class PaymentAllocation(models.Model):
                 name="payment_allocation_amount_positive",
             )
         ]
+
+
+class DarajaPaymentAttempt(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+        REVIEW = "review", "Needs review"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(
+        Organization, on_delete=models.PROTECT, related_name="daraja_payment_attempts"
+    )
+    invoice = models.ForeignKey(
+        Invoice, on_delete=models.PROTECT, related_name="daraja_payment_attempts"
+    )
+    customer = models.ForeignKey(
+        Customer, on_delete=models.PROTECT, related_name="daraja_payment_attempts"
+    )
+    amount = models.DecimalField(max_digits=30, decimal_places=5)
+    phone_number = models.CharField(max_length=12)
+    idempotency_key = models.UUIDField()
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING
+    )
+    checkout_request_id = models.CharField(max_length=120, unique=True, null=True)
+    merchant_request_id = models.CharField(max_length=120, blank=True)
+    payment = models.OneToOneField(
+        Payment,
+        on_delete=models.PROTECT,
+        related_name="daraja_attempt",
+        null=True,
+        blank=True,
+    )
+    result_code = models.CharField(max_length=40, blank=True)
+    result_description = models.CharField(max_length=240, blank=True)
+    response_data = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="daraja_payment_attempts",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "idempotency_key"],
+                name="unique_daraja_attempt_idempotency_per_org",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0), name="daraja_attempt_amount_positive"
+            ),
+        ]
+
+
+class DarajaCallbackEvent(models.Model):
+    attempt = models.ForeignKey(
+        DarajaPaymentAttempt,
+        on_delete=models.PROTECT,
+        related_name="callback_events",
+        null=True,
+        blank=True,
+    )
+    checkout_request_id = models.CharField(max_length=120, unique=True)
+    payload = models.JSONField(default=dict, blank=True)
+    delivery_count = models.PositiveIntegerField(default=1)
+    received_at = models.DateTimeField(auto_now_add=True)
+    last_received_at = models.DateTimeField(auto_now=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-received_at"]

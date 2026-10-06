@@ -2,7 +2,7 @@
 
 **Status:** Founder-directed starting scope; market fit and production readiness are not validated
 
-**Last updated:** 6 October 2026
+**Last updated:** 7 October 2026
 
 This backlog turns the existing product plan into an implementation sequence. It does not represent customer commitments or a delivery date.
 
@@ -38,7 +38,7 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Cover partial, unmatched, duplicated, delayed, reversed, refunded, and overpaid cases.
 - **Acceptance:** balances use exact arithmetic; event retries do not duplicate records; unresolved exceptions are visible and recoverable.
 
-**Implementation progress:** Issue #15 shipped manual receipts, same-customer/same-currency invoice allocations, derived balances, and auditable reversal paths in v0.6.0. Issue #19 shipped tenant-scoped finance CSV exports that preserve unmatched and reversed states in v0.7.0. Issue #23 established the provider-neutral event boundary, and issue #25 documented tenant credential safeguards. Issue #29 selects Safaricom Daraja M-Pesa Express/STK Push as the provisional first sandbox connector for Kenya-focused tenant invoice collections; Flutterwave is deferred for later evaluation. No connector or live payments are shipped. ADR-004 recommends Cloud Run + Cloud SQL for PostgreSQL + Secret Manager as the initial hosted reference path; Kubernetes is optional, and region/sizing still require readiness and cost review. Live tenant shortcode connections remain blocked until Safaricom confirms the SaaS model and merchant onboarding in writing. Continue manual payment recording meanwhile; the next technical slice is a sandbox-only Daraja attempt/callback/status-verification flow using synthetic data.
+**Implementation progress:** Issue #15 shipped manual receipts, same-customer/same-currency invoice allocations, derived balances, and auditable reversal paths in v0.6.0. Issue #19 shipped tenant-scoped finance CSV exports that preserve unmatched and reversed states in v0.7.0. Issue #23 established the provider-neutral event boundary, and issue #25 documented tenant credential safeguards. Issue #29 selects Safaricom Daraja M-Pesa Express/STK Push as the provisional first sandbox connector for Kenya-focused tenant invoice collections; Flutterwave is deferred for later evaluation. Issue #31 implements sandbox-only STK attempts, durable callbacks, M-Pesa Express Query verification, and finance receipt capture through the existing manual workflow. Automatic ledger receipt creation is deferred until the query response contract is confirmed with the Daraja simulator. No live payments are shipped. ADR-004 recommends Cloud Run + Cloud SQL for PostgreSQL + Secret Manager as the initial hosted reference path; Kubernetes is optional, and region/sizing still require readiness and cost review. Live tenant shortcode connections remain blocked until Safaricom confirms the SaaS model and merchant onboarding in writing. Next, validate the query response contract using synthetic sandbox data.
 
 ## P4 — Evaluation readiness
 

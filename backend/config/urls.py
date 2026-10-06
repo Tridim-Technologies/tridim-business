@@ -18,6 +18,10 @@ from quotations.job_views import (
 )
 from invoicing.views import (
     finance_export_view,
+    daraja_payment_attempt_create_view,
+    daraja_payment_attempt_reconcile_view,
+    daraja_payment_attempt_view,
+    daraja_stk_callback_view,
     invoice_issue_view,
     invoice_void_view,
     invoices_view,
@@ -31,6 +35,11 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/csrf/", csrf_token),
     path("api/session/", session_view),
+    path(
+        "api/payments/daraja/sandbox/stk/callback/",
+        daraja_stk_callback_view,
+        name="daraja-stk-callback",
+    ),
     path("api/organizations/", organizations_view, name="organizations"),
     path(
         "api/organizations/<uuid:organization_id>/customers/",
@@ -106,6 +115,21 @@ urlpatterns = [
         "api/organizations/<uuid:organization_id>/invoices/<uuid:invoice_id>/void/",
         invoice_void_view,
         name="invoice-void",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/invoices/<uuid:invoice_id>/daraja/sandbox-attempts/",
+        daraja_payment_attempt_create_view,
+        name="daraja-attempt-create",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/daraja/sandbox-attempts/<uuid:attempt_id>/",
+        daraja_payment_attempt_view,
+        name="daraja-attempt",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/daraja/sandbox-attempts/<uuid:attempt_id>/reconcile/",
+        daraja_payment_attempt_reconcile_view,
+        name="daraja-attempt-reconcile",
     ),
     path(
         "api/organizations/<uuid:organization_id>/payments/",

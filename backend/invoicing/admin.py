@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import Invoice, InvoiceLine, InvoiceSequence
+from .models import (
+    DarajaCallbackEvent,
+    DarajaPaymentAttempt,
+    Invoice,
+    InvoiceLine,
+    InvoiceSequence,
+)
 
 
 class InvoiceLineInline(admin.TabularInline):
@@ -67,6 +73,58 @@ class InvoiceAdmin(admin.ModelAdmin):
 class InvoiceSequenceAdmin(admin.ModelAdmin):
     list_display = ("organization", "year", "next_number")
     readonly_fields = ("organization", "year", "next_number")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(DarajaPaymentAttempt)
+class DarajaPaymentAttemptAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "organization",
+        "invoice",
+        "amount",
+        "status",
+        "checkout_request_id",
+        "created_at",
+    )
+    list_filter = ("status", "organization", "created_at")
+    search_fields = (
+        "checkout_request_id",
+        "merchant_request_id",
+        "invoice__invoice_number",
+    )
+    readonly_fields = tuple(field.name for field in DarajaPaymentAttempt._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(DarajaCallbackEvent)
+class DarajaCallbackEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "checkout_request_id",
+        "attempt",
+        "delivery_count",
+        "received_at",
+        "processed_at",
+    )
+    list_filter = ("received_at", "processed_at")
+    search_fields = ("checkout_request_id",)
+    readonly_fields = tuple(field.name for field in DarajaCallbackEvent._meta.fields)
 
     def has_add_permission(self, request):
         return False

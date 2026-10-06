@@ -102,3 +102,12 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
 }
+
+DARAJA_ENV = os.environ.get("DARAJA_ENV", "sandbox").strip().lower()
+if DARAJA_ENV != "sandbox":
+    raise ImproperlyConfigured("This release supports Daraja sandbox mode only.")
+DARAJA_CONSUMER_KEY = os.environ.get("DARAJA_CONSUMER_KEY", "")
+DARAJA_CONSUMER_SECRET = os.environ.get("DARAJA_CONSUMER_SECRET", "")
+DARAJA_SHORTCODE = os.environ.get("DARAJA_SHORTCODE", "")
+DARAJA_PASSKEY = os.environ.get("DARAJA_PASSKEY", "")
+DARAJA_CALLBACK_URL = os.environ.get("DARAJA_CALLBACK_URL", "")

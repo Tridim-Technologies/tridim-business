@@ -4,7 +4,7 @@ Tridim Business is a global-ambition business operations platform from Tridim Te
 
 ## Project status
 
-This repository contains the first internal alpha foundation and planning documents. Signed-in organization members can manage customers, prepare quotations, record quotation decisions, and create one linked job when a quotation is accepted. Tax and quotation totals are not calculated. The illustrative workflow prototype uses synthetic data, has no backend and saves nothing.
+This repository contains the internal alpha foundation and planning documents. Signed-in organization members can manage customers, prepare quotations, record quotation decisions, and create one linked job when a quotation is accepted. Finance members can issue invoices and record, allocate, and reverse manual receipts. A sandbox-only Daraja M-Pesa Express attempt and status flow is available for synthetic data; it does not create ledger receipts automatically or enable live payments. Tax and quotation totals are not calculated. The illustrative workflow prototype uses synthetic data, has no backend and saves nothing.
 
 ## Start here
 
@@ -12,7 +12,8 @@ This repository contains the first internal alpha foundation and planning docume
 2. Read [`docs/DETAILED_ROADMAP.md`](docs/DETAILED_ROADMAP.md) for milestone sequence and gates.
 3. Review [`docs/VALIDATION_PLAN.md`](docs/VALIDATION_PLAN.md) for build checks and later field-evaluation readiness.
 4. Review [`docs/ADR-001-FOUNDATION.md`](docs/ADR-001-FOUNDATION.md) for the accepted initial platform decision.
-5. Open [`prototype/job-to-cash/index.html`](prototype/job-to-cash/index.html) for the sample workflow concept.
+5. Read [`docs/DARAJA_SANDBOX.md`](docs/DARAJA_SANDBOX.md) before configuring the sandbox M-Pesa Express flow.
+6. Open [`prototype/job-to-cash/index.html`](prototype/job-to-cash/index.html) for the sample workflow concept.
 
 ## Scope
 
@@ -55,7 +56,7 @@ Development tooling is managed with [uv](https://docs.astral.sh/uv/) using `pypr
 uv run pymarkdown scan README.md 'docs/**/*.md' '.github/**/*.md'
 uv run python scripts/check_prototype.py
 uv run python backend/manage.py check
-uv run python backend/manage.py test accounts customers quotations
+uv run python backend/manage.py test accounts customers quotations invoicing
 (cd frontend && npm ci && npm run build)
 ```
 
