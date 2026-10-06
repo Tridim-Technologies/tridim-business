@@ -17,6 +17,7 @@ from quotations.job_views import (
     jobs_view,
 )
 from invoicing.views import (
+    finance_export_view,
     invoice_issue_view,
     invoice_void_view,
     invoices_view,
@@ -90,6 +91,11 @@ urlpatterns = [
         "api/organizations/<uuid:organization_id>/invoices/",
         invoices_view,
         name="invoices",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/exports/<str:resource>.csv",
+        finance_export_view,
+        name="finance-export",
     ),
     path(
         "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/invoice/",
