@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v0.7.0 (2026-10-06)
+
+### Documentation
+
+- **roadmap**: Mark manual payment slice complete
+  ([#18](https://github.com/Tridim-Technologies/tridim-business/pull/18),
+  [`ffccfba`](https://github.com/Tridim-Technologies/tridim-business/commit/ffccfbace44248f1dd26a009c5c7885073e1647e))
+
+### Features
+
+- **exports**: Add finance CSV downloads
+  ([#20](https://github.com/Tridim-Technologies/tridim-business/pull/20),
+  [`655c466`](https://github.com/Tridim-Technologies/tridim-business/commit/655c466fa5814f2d69b5163795d6f4cdf56e8931))
+
+
 ## v0.6.0 (2026-10-06)
 
 ### Features
