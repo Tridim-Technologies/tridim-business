@@ -38,7 +38,7 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Cover partial, unmatched, duplicated, delayed, reversed, refunded, and overpaid cases.
 - **Acceptance:** balances use exact arithmetic; event retries do not duplicate records; unresolved exceptions are visible and recoverable.
 
-**Implementation progress:** Issue #15 shipped manual receipts, same-customer/same-currency invoice allocations, derived balances, and auditable reversal paths in v0.6.0. Issue #19 shipped tenant-scoped finance CSV exports that preserve unmatched and reversed states in v0.7.0. Issue #23 records a provisional Flutterwave sandbox direction and provider-neutral event contract in ADR-002; no connector or live payments are shipped. Next slices are a credential/account-connection security design, then sandbox attempt/event processing and reconciliation, each with separate issues and review.
+**Implementation progress:** Issue #15 shipped manual receipts, same-customer/same-currency invoice allocations, derived balances, and auditable reversal paths in v0.6.0. Issue #19 shipped tenant-scoped finance CSV exports that preserve unmatched and reversed states in v0.7.0. Issue #23 records a provisional Flutterwave sandbox direction and provider-neutral event contract in ADR-002; issue #25 records tenant credential lifecycle and secret-storage safeguards in ADR-003. No connector or live payments are shipped. Next slices are confirmation of provider account-connection terms and a chosen deployment/secret-manager adapter, then sandbox attempt/event processing and reconciliation, each with separate issues and review.
 
 ## P4 — Evaluation readiness
 
