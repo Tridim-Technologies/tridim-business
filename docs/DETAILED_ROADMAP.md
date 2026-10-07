@@ -2,7 +2,7 @@
 
 **Status:** Founder-directed build sequence; dates and staffing are not committed
 
-**Last updated:** 6 October 2026
+**Last updated:** 7 October 2026
 
 **Product ambition:** Global; Kenya remains a candidate market
 
@@ -33,7 +33,7 @@
 
 - **M0–M2:** Foundation and customer-to-job workflow are implemented in the existing releases.
 - **M3:** Job delivery, invoice issuance, correction history, and owner/finance invoice visibility are complete in v0.5.0.
-- **M4:** Manual receipts, same-customer/same-currency allocations, derived balances, and auditable reversals shipped in v0.6.0 through issue #15. Issue #19 shipped finance CSV exports for external review in v0.7.0. Issue #23 records the provisional first-provider sandbox direction and event/recovery contract in [ADR-002](ADR-002-PROVIDER-PAYMENTS.md); issue #25 records tenant credential lifecycle and secret-storage safeguards in [ADR-003](ADR-003-PAYMENT-CREDENTIAL-SECURITY.md). No provider connector or live payments are shipped. Confirmation of provider account-connection terms and the deployment/secret-manager choice precedes a sandbox integration. Refunds, automated matching, and broader reconciliation remain future work.
+- **M4:** Manual receipts, same-customer/same-currency allocations, derived balances, and auditable reversals shipped in v0.6.0 through issue #15. Issue #19 shipped finance CSV exports for external review in v0.7.0. Issue #23 records the provisional first-provider sandbox direction and event/recovery contract in [ADR-002](ADR-002-PROVIDER-PAYMENTS.md); issue #25 records tenant credential lifecycle and secret-storage safeguards in [ADR-003](ADR-003-PAYMENT-CREDENTIAL-SECURITY.md). Issue #31 adds sandbox-only Daraja M-Pesa Express attempts, callbacks, and checkout-query verification, with receipt capture remaining in the existing finance workflow until the query response contract is confirmed against the simulator. No live payments are enabled. Confirm provider account-connection terms and the deployment/secret-manager choice before any live integration. Refunds, automated matching, and broader reconciliation remain future work.
 
 ## M0 — Repository and decision setup
 

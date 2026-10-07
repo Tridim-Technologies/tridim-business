@@ -1,10 +1,11 @@
 import json
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -12,7 +13,13 @@ from accounts.models import Membership, Organization
 from customers.models import Customer
 from quotations.models import Job, Quotation, QuotationLine
 
-from .models import Invoice, Payment, PaymentAllocation
+from .models import (
+    DarajaCallbackEvent,
+    DarajaPaymentAttempt,
+    Invoice,
+    Payment,
+    PaymentAllocation,
+)
 
 
 class PaymentWorkflowTests(TestCase):
@@ -270,3 +277,393 @@ class PaymentWorkflowTests(TestCase):
         second_invoice = self.create_invoice(self.customer, total=Decimal("5.00000"))
         reversed_attempt = self.allocate(payment["id"], second_invoice.pk, "1.00000")
         self.assertEqual(reversed_attempt.status_code, 409)
+
+    @override_settings(
+        DARAJA_CONSUMER_KEY="sandbox-key",
+        DARAJA_CONSUMER_SECRET="sandbox-secret",
+        DARAJA_SHORTCODE="174379",
+        DARAJA_PASSKEY="sandbox-passkey",
+        DARAJA_CALLBACK_URL="https://example.invalid/api/payments/daraja/sandbox/stk/callback/",
+    )
+    @patch("invoicing.views.initiate_stk_push")
+    def test_daraja_attempt_is_idempotent_and_reserves_invoice_balance(self, initiate):
+        initiate.return_value = {
+            "ResponseCode": "0",
+            "MerchantRequestID": "merchant-1",
+            "CheckoutRequestID": "ws_CO_1",
+        }
+        url = reverse(
+            "daraja-attempt-create", args=[self.organization.pk, self.invoice.pk]
+        )
+        key = uuid4()
+        payload = {"amount": "8", "phone_number": "+254700000000"}
+        first = self.post_json(url, payload, headers={"Idempotency-Key": str(key)})
+        repeated = self.post_json(url, payload, headers={"Idempotency-Key": str(key)})
+        self.assertEqual(first.status_code, 202, first.content)
+        self.assertEqual(repeated.status_code, 202, repeated.content)
+        self.assertEqual(first.json()["id"], repeated.json()["id"])
+        self.assertEqual(initiate.call_count, 1)
+        attempt = DarajaPaymentAttempt.objects.get(pk=first.json()["id"])
+        self.assertEqual(attempt.phone_number, "254700000000")
+
+        conflict = self.post_json(
+            url,
+            {"amount": "8", "phone_number": "254711111111"},
+            headers={"Idempotency-Key": str(key)},
+        )
+        over_reserved = self.post_json(
+            url,
+            {"amount": "5", "phone_number": "254700000000"},
+            headers={"Idempotency-Key": str(uuid4())},
+        )
+        self.assertEqual(conflict.status_code, 409)
+        self.assertEqual(over_reserved.status_code, 409)
+        self.assertEqual(initiate.call_count, 1)
+
+    @override_settings(
+        DARAJA_CONSUMER_KEY="sandbox-key",
+        DARAJA_CONSUMER_SECRET="sandbox-secret",
+        DARAJA_SHORTCODE="174379",
+        DARAJA_PASSKEY="sandbox-passkey",
+        DARAJA_CALLBACK_URL="https://example.invalid/api/payments/daraja/sandbox/stk/callback/",
+    )
+    def test_daraja_requires_sandbox_configuration_kes_and_whole_amount(self):
+        url = reverse(
+            "daraja-attempt-create", args=[self.organization.pk, self.invoice.pk]
+        )
+        with patch("invoicing.views.initiate_stk_push") as initiate:
+            fractional = self.post_json(
+                url,
+                {"amount": "1.50", "phone_number": "0700000000"},
+                headers={"Idempotency-Key": str(uuid4())},
+            )
+        self.assertEqual(fractional.status_code, 400)
+        initiate.assert_not_called()
+
+        usd_invoice = self.create_invoice(
+            self.customer, total=Decimal("10.00000"), currency="USD"
+        )
+        usd_url = reverse(
+            "daraja-attempt-create", args=[self.organization.pk, usd_invoice.pk]
+        )
+        with patch("invoicing.views.initiate_stk_push") as initiate:
+            unsupported_currency = self.post_json(
+                usd_url,
+                {"amount": "5", "phone_number": "0700000000"},
+                headers={"Idempotency-Key": str(uuid4())},
+            )
+        self.assertEqual(unsupported_currency.status_code, 400)
+        initiate.assert_not_called()
+
+        with override_settings(DARAJA_ENV="production"):
+            live_disabled = self.post_json(
+                url,
+                {"amount": "5", "phone_number": "0700000000"},
+                headers={"Idempotency-Key": str(uuid4())},
+            )
+        self.assertEqual(live_disabled.status_code, 503)
+
+    def test_daraja_callback_is_ignored_when_sandbox_is_not_configured(self):
+        callback = {
+            "Body": {
+                "stkCallback": {
+                    "CheckoutRequestID": "unconfigured-checkout",
+                    "MerchantRequestID": "unconfigured-merchant",
+                    "ResultCode": 0,
+                }
+            }
+        }
+        response = self.client.post(
+            reverse("daraja-stk-callback"),
+            data=json.dumps(callback),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(DarajaCallbackEvent.objects.count(), 0)
+
+    @override_settings(
+        DARAJA_CONSUMER_KEY="sandbox-key",
+        DARAJA_CONSUMER_SECRET="sandbox-secret",
+        DARAJA_SHORTCODE="174379",
+        DARAJA_PASSKEY="sandbox-passkey",
+        DARAJA_CALLBACK_URL="https://example.invalid/api/payments/daraja/sandbox/stk/callback/",
+    )
+    @patch("invoicing.views.initiate_stk_push")
+    @patch("invoicing.views.query_stk_push")
+    def test_success_callback_requires_matching_query_ids_amount_and_phone(
+        self, query, initiate
+    ):
+        initiate.return_value = {
+            "ResponseCode": "0",
+            "MerchantRequestID": "merchant-2",
+            "CheckoutRequestID": "ws_CO_2",
+        }
+        query.return_value = {
+            "ResponseCode": "0",
+            "MerchantRequestID": "merchant-2",
+            "CheckoutRequestID": "ws_CO_2",
+            "ResultCode": "0",
+            "ResultDesc": "The service request is processed successfully.",
+        }
+        url = reverse(
+            "daraja-attempt-create", args=[self.organization.pk, self.invoice.pk]
+        )
+        created = self.post_json(
+            url,
+            {"amount": "5", "phone_number": "0700000000"},
+            headers={"Idempotency-Key": str(uuid4())},
+        )
+        self.assertEqual(created.status_code, 202, created.content)
+        callback_url = reverse("daraja-stk-callback")
+        callback = {
+            "Body": {
+                "stkCallback": {
+                    "MerchantRequestID": "merchant-2",
+                    "CheckoutRequestID": "ws_CO_2",
+                    "ResultCode": 0,
+                    "ResultDesc": "Success",
+                    "CallbackMetadata": {
+                        "Item": [
+                            {"Name": "Amount", "Value": 5},
+                            {"Name": "PhoneNumber", "Value": 254700000000},
+                            {"Name": "MpesaReceiptNumber", "Value": "TEST123"},
+                        ]
+                    },
+                }
+            }
+        }
+        callback_response = self.client.post(
+            callback_url,
+            data=json.dumps(callback),
+            content_type="application/json",
+        )
+        attempt = DarajaPaymentAttempt.objects.get(pk=created.json()["id"])
+        self.assertEqual(callback_response.status_code, 200)
+        self.assertEqual(attempt.status, DarajaPaymentAttempt.Status.SUCCEEDED)
+        self.assertIsNone(attempt.payment_id)
+        self.assertEqual(Payment.objects.count(), 0)
+        event = DarajaCallbackEvent.objects.get(checkout_request_id="ws_CO_2")
+        self.assertEqual(event.payload["CallbackMetadata"]["Item"][0]["Value"], 5)
+        self.assertNotIn("254700000000", json.dumps(event.payload))
+        self.assertNotIn("MpesaReceiptNumber", json.dumps(event.payload))
+
+        self.client.post(
+            callback_url,
+            data=json.dumps(callback),
+            content_type="application/json",
+        )
+        event.refresh_from_db()
+        self.assertEqual(event.delivery_count, 2)
+        self.assertEqual(query.call_count, 1)
+
+    @override_settings(
+        DARAJA_CONSUMER_KEY="sandbox-key",
+        DARAJA_CONSUMER_SECRET="sandbox-secret",
+        DARAJA_SHORTCODE="174379",
+        DARAJA_PASSKEY="sandbox-passkey",
+        DARAJA_CALLBACK_URL="https://example.invalid/api/payments/daraja/sandbox/stk/callback/",
+    )
+    @patch("invoicing.views.initiate_stk_push")
+    @patch("invoicing.views.query_stk_push")
+    def test_early_callback_is_attached_after_initiation_response(
+        self, query, initiate
+    ):
+        query.return_value = {
+            "ResponseCode": "0",
+            "MerchantRequestID": "merchant-early",
+            "CheckoutRequestID": "ws_CO_early",
+            "ResultCode": "0",
+            "ResultDesc": "Success",
+        }
+        callback = {
+            "Body": {
+                "stkCallback": {
+                    "MerchantRequestID": "merchant-early",
+                    "CheckoutRequestID": "ws_CO_early",
+                    "ResultCode": 0,
+                    "CallbackMetadata": {
+                        "Item": [
+                            {"Name": "Amount", "Value": 5},
+                            {"Name": "PhoneNumber", "Value": 254700000000},
+                        ]
+                    },
+                }
+            }
+        }
+
+        def initiate_with_early_callback(_attempt):
+            self.client.post(
+                reverse("daraja-stk-callback"),
+                data=json.dumps(callback),
+                content_type="application/json",
+            )
+            return {
+                "ResponseCode": "0",
+                "MerchantRequestID": "merchant-early",
+                "CheckoutRequestID": "ws_CO_early",
+            }
+
+        initiate.side_effect = initiate_with_early_callback
+        url = reverse(
+            "daraja-attempt-create", args=[self.organization.pk, self.invoice.pk]
+        )
+        response = self.post_json(
+            url,
+            {"amount": "5", "phone_number": "0700000000"},
+            headers={"Idempotency-Key": str(uuid4())},
+        )
+        attempt = DarajaPaymentAttempt.objects.get(pk=response.json()["id"])
+        event = DarajaCallbackEvent.objects.get(checkout_request_id="ws_CO_early")
+        self.assertEqual(event.attempt_id, attempt.pk)
+        self.assertEqual(attempt.status, DarajaPaymentAttempt.Status.SUCCEEDED)
+        self.assertEqual(query.call_count, 1)
+
+    @override_settings(
+        DARAJA_CONSUMER_KEY="sandbox-key",
+        DARAJA_CONSUMER_SECRET="sandbox-secret",
+        DARAJA_SHORTCODE="174379",
+        DARAJA_PASSKEY="sandbox-passkey",
+        DARAJA_CALLBACK_URL="https://example.invalid/api/payments/daraja/sandbox/stk/callback/",
+    )
+    @patch("invoicing.views.initiate_stk_push")
+    @patch("invoicing.views.query_stk_push")
+    def test_callback_mismatch_stays_in_review_and_can_be_reconciled(
+        self, query, initiate
+    ):
+        initiate.return_value = {
+            "ResponseCode": "0",
+            "MerchantRequestID": "merchant-3",
+            "CheckoutRequestID": "ws_CO_3",
+        }
+        query.side_effect = [
+            TimeoutError("temporary"),
+            {
+                "ResponseCode": "0",
+                "MerchantRequestID": "merchant-3",
+                "CheckoutRequestID": "ws_CO_3",
+                "ResultCode": "0",
+                "ResultDesc": "Success",
+            },
+        ]
+        url = reverse(
+            "daraja-attempt-create", args=[self.organization.pk, self.invoice.pk]
+        )
+        created = self.post_json(
+            url,
+            {"amount": "5", "phone_number": "0700000000"},
+            headers={"Idempotency-Key": str(uuid4())},
+        )
+        callback = {
+            "Body": {
+                "stkCallback": {
+                    "MerchantRequestID": "merchant-3",
+                    "CheckoutRequestID": "ws_CO_3",
+                    "ResultCode": 0,
+                    "ResultDesc": "Success",
+                    "CallbackMetadata": {
+                        "Item": [
+                            {"Name": "Amount", "Value": 99},
+                            {"Name": "PhoneNumber", "Value": 254700000000},
+                        ]
+                    },
+                }
+            }
+        }
+        callback_url = reverse("daraja-stk-callback")
+        self.client.post(
+            callback_url,
+            data=json.dumps(callback),
+            content_type="application/json",
+        )
+        attempt = DarajaPaymentAttempt.objects.get(pk=created.json()["id"])
+        self.assertEqual(attempt.status, DarajaPaymentAttempt.Status.PENDING)
+
+        self.client.force_login(self.finance)
+        reconcile_url = reverse(
+            "daraja-attempt-reconcile", args=[self.organization.pk, attempt.pk]
+        )
+        reconciled = self.client.post(reconcile_url)
+        attempt.refresh_from_db()
+        self.assertEqual(reconciled.status_code, 202)
+        self.assertEqual(attempt.status, DarajaPaymentAttempt.Status.REVIEW)
+        self.assertEqual(Payment.objects.count(), 0)
+
+    @override_settings(
+        DARAJA_CONSUMER_KEY="sandbox-key",
+        DARAJA_CONSUMER_SECRET="sandbox-secret",
+        DARAJA_SHORTCODE="174379",
+        DARAJA_PASSKEY="sandbox-passkey",
+        DARAJA_CALLBACK_URL="https://example.invalid/api/payments/daraja/sandbox/stk/callback/",
+    )
+    @patch("invoicing.views.initiate_stk_push")
+    @patch("invoicing.views.query_stk_push")
+    def test_manual_receipt_links_to_confirmed_attempt_before_allocation(
+        self, query, initiate
+    ):
+        initiate.side_effect = [
+            {
+                "ResponseCode": "0",
+                "MerchantRequestID": "merchant-4",
+                "CheckoutRequestID": "ws_CO_4",
+            },
+            {
+                "ResponseCode": "0",
+                "MerchantRequestID": "merchant-5",
+                "CheckoutRequestID": "ws_CO_5",
+            },
+        ]
+        query.return_value = {
+            "ResponseCode": "0",
+            "MerchantRequestID": "merchant-4",
+            "CheckoutRequestID": "ws_CO_4",
+            "ResultCode": "0",
+            "ResultDesc": "Success",
+        }
+        attempt_url = reverse(
+            "daraja-attempt-create", args=[self.organization.pk, self.invoice.pk]
+        )
+        started = self.post_json(
+            attempt_url,
+            {"amount": "5", "phone_number": "0700000000"},
+            headers={"Idempotency-Key": str(uuid4())},
+        )
+        callback = {
+            "Body": {
+                "stkCallback": {
+                    "MerchantRequestID": "merchant-4",
+                    "CheckoutRequestID": "ws_CO_4",
+                    "ResultCode": 0,
+                    "CallbackMetadata": {
+                        "Item": [
+                            {"Name": "Amount", "Value": 5},
+                            {"Name": "PhoneNumber", "Value": 254700000000},
+                        ]
+                    },
+                }
+            }
+        }
+        self.client.post(
+            reverse("daraja-stk-callback"),
+            data=json.dumps(callback),
+            content_type="application/json",
+        )
+        attempt = DarajaPaymentAttempt.objects.get(pk=started.json()["id"])
+        self.assertEqual(attempt.status, DarajaPaymentAttempt.Status.SUCCEEDED)
+        self.assertIsNone(attempt.payment_id)
+
+        payment_response, _, _ = self.record_payment(
+            amount="5.00000", reference="ws_CO_4", method="mobile_money"
+        )
+        attempt.refresh_from_db()
+        self.assertEqual(payment_response.status_code, 201, payment_response.content)
+        self.assertEqual(str(attempt.payment_id), payment_response.json()["id"])
+        allocation = self.allocate(attempt.payment_id, self.invoice.pk, "5.00000")
+        self.assertEqual(allocation.status_code, 200, allocation.content)
+
+        next_attempt = self.post_json(
+            attempt_url,
+            {"amount": "7", "phone_number": "0700000000"},
+            headers={"Idempotency-Key": str(uuid4())},
+        )
+        self.assertEqual(next_attempt.status_code, 202, next_attempt.content)
+        self.assertEqual(initiate.call_count, 2)

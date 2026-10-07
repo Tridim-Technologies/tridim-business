@@ -2,7 +2,13 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from .models import Invoice, InvoiceLine, Payment, PaymentAllocation
+from .models import (
+    DarajaPaymentAttempt,
+    Invoice,
+    InvoiceLine,
+    Payment,
+    PaymentAllocation,
+)
 
 
 class InvoiceLineSerializer(serializers.ModelSerializer):
@@ -182,6 +188,31 @@ class ReversalSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError("A reason is required.")
         return value
+
+
+class DarajaPaymentAttemptCreateSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(
+        max_digits=12, decimal_places=0, min_value=Decimal("1")
+    )
+    phone_number = serializers.RegexField(r"^(?:\+?254|0)?[17]\d{8}$", max_length=13)
+
+
+class DarajaPaymentAttemptSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DarajaPaymentAttempt
+        fields = (
+            "id",
+            "invoice",
+            "amount",
+            "status",
+            "checkout_request_id",
+            "payment",
+            "result_code",
+            "result_description",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = fields
 
 
 class InvoiceLineCorrectionSerializer(serializers.Serializer):

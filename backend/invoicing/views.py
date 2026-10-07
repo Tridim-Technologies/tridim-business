@@ -5,9 +5,11 @@ from decimal import Decimal, localcontext
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.db.models import Prefetch
 from django.http import JsonResponse, StreamingHttpResponse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from rest_framework.exceptions import ValidationError
 
@@ -21,6 +23,8 @@ from .models import (
     InvoiceSequence,
     Payment,
     PaymentAllocation,
+    DarajaCallbackEvent,
+    DarajaPaymentAttempt,
 )
 from .serializers import (
     InvoiceIssueSerializer,
@@ -30,6 +34,21 @@ from .serializers import (
     PaymentRecordSerializer,
     PaymentSerializer,
     ReversalSerializer,
+    DarajaPaymentAttemptCreateSerializer,
+    DarajaPaymentAttemptSerializer,
+)
+from .daraja import (
+    DarajaUnavailable,
+    amount_for_attempt,
+    callback_matches_success,
+    initiate_stk_push,
+    is_final_query,
+    is_successful_query,
+    normalize_phone_number,
+    phone_number_digest,
+    query_matches_attempt,
+    query_stk_push,
+    is_configured as daraja_is_configured,
 )
 
 INVOICE_ROLES = {
@@ -110,6 +129,27 @@ def _payment_queryset(organization_id):
 def _payment_response(payment, status=200):
     payment = _payment_queryset(payment.organization_id).get(pk=payment.pk)
     return JsonResponse(PaymentSerializer(payment).data, status=status)
+
+
+def _link_daraja_attempt_payment(payment):
+    if payment.method != Payment.Method.MOBILE_MONEY or not payment.reference:
+        return
+    attempt = (
+        DarajaPaymentAttempt.objects.select_for_update()
+        .filter(
+            organization=payment.organization,
+            customer=payment.customer,
+            amount=payment.amount,
+            checkout_request_id=payment.reference,
+            status=DarajaPaymentAttempt.Status.SUCCEEDED,
+            payment__isnull=True,
+            invoice__currency=payment.currency,
+        )
+        .first()
+    )
+    if attempt:
+        attempt.payment = payment
+        attempt.save(update_fields=["payment", "updated_at"])
 
 
 def _invoice_response(invoice, status=200):
@@ -441,6 +481,7 @@ def payments_view(request, organization_id):
                 and existing.recorded_by_id == request.user.pk
             )
             if same:
+                _link_daraja_attempt_payment(existing)
                 return _payment_response(existing)
             return JsonResponse(
                 {
@@ -460,7 +501,360 @@ def payments_view(request, organization_id):
             idempotency_key=idempotency_key,
             recorded_by=request.user,
         )
+        _link_daraja_attempt_payment(payment)
     return _payment_response(payment, status=201)
+
+
+def _daraja_attempt_response(attempt, status=200):
+    return JsonResponse(DarajaPaymentAttemptSerializer(attempt).data, status=status)
+
+
+def _invoice_active_allocated(invoice):
+    return sum(
+        PaymentAllocation.objects.filter(
+            invoice=invoice,
+            reversed_at__isnull=True,
+            payment__reversed_at__isnull=True,
+        ).values_list("amount", flat=True),
+        Decimal("0.00000"),
+    )
+
+
+def _invoice_active_attempt_reservations(invoice):
+    reserved = Decimal("0.00000")
+    statuses = (
+        DarajaPaymentAttempt.Status.PENDING,
+        DarajaPaymentAttempt.Status.REVIEW,
+        DarajaPaymentAttempt.Status.SUCCEEDED,
+    )
+    attempts = DarajaPaymentAttempt.objects.filter(
+        invoice=invoice, status__in=statuses
+    ).select_for_update()
+    for attempt in attempts:
+        if (
+            attempt.status == DarajaPaymentAttempt.Status.SUCCEEDED
+            and attempt.payment_id
+        ):
+            if PaymentAllocation.objects.filter(
+                payment_id=attempt.payment_id, reversed_at__isnull=True
+            ).exists():
+                continue
+        reserved += attempt.amount
+    return reserved
+
+
+@require_http_methods(["POST"])
+def daraja_payment_attempt_create_view(request, organization_id, invoice_id):
+    _, error = _membership(request, organization_id)
+    if error:
+        return error
+    if not daraja_is_configured():
+        return JsonResponse(
+            {"detail": "Daraja sandbox payments are not configured."}, status=503
+        )
+    raw_key = request.headers.get("Idempotency-Key", "")
+    try:
+        idempotency_key = UUID(raw_key)
+    except (ValueError, TypeError):
+        return JsonResponse(
+            {"detail": "A valid Idempotency-Key UUID header is required."}, status=400
+        )
+    payload, error = _payload(request)
+    if error:
+        return error
+    serializer = DarajaPaymentAttemptCreateSerializer(data=payload)
+    errors = _validate(serializer)
+    if errors:
+        return JsonResponse(errors, status=400)
+    values = serializer.validated_data
+    try:
+        amount = amount_for_attempt(values["amount"])
+        phone_number = normalize_phone_number(values["phone_number"])
+    except ValueError as error:
+        return JsonResponse({"detail": str(error)}, status=400)
+
+    with transaction.atomic():
+        organization = (
+            Organization.objects.select_for_update().filter(pk=organization_id).first()
+        )
+        if organization is None:
+            return JsonResponse({"detail": "Organization not found."}, status=404)
+        existing = DarajaPaymentAttempt.objects.filter(
+            organization=organization, idempotency_key=idempotency_key
+        ).first()
+        if existing is not None:
+            same = (
+                existing.invoice_id == invoice_id
+                and existing.amount == amount
+                and existing.phone_number == phone_number
+                and existing.created_by_id == request.user.pk
+            )
+            if same:
+                return _daraja_attempt_response(existing, status=202)
+            return JsonResponse(
+                {
+                    "detail": "This Idempotency-Key was already used for another attempt."
+                },
+                status=409,
+            )
+        invoice = (
+            Invoice.objects.select_for_update()
+            .select_related("customer")
+            .filter(organization=organization, pk=invoice_id)
+            .first()
+        )
+        if invoice is None:
+            return JsonResponse({"detail": "Invoice not found."}, status=404)
+        if invoice.status != Invoice.Status.ISSUED:
+            return JsonResponse(
+                {"detail": "Only issued invoices can receive M-Pesa prompts."},
+                status=409,
+            )
+        if invoice.currency != "KES":
+            return JsonResponse(
+                {"detail": "M-Pesa Express attempts require a KES invoice."}, status=400
+            )
+        available = (
+            invoice.total
+            - _invoice_active_allocated(invoice)
+            - _invoice_active_attempt_reservations(invoice)
+        )
+        if available <= 0 or amount > available:
+            return JsonResponse(
+                {"detail": "The amount exceeds the invoice's available balance."},
+                status=409,
+            )
+        attempt = DarajaPaymentAttempt.objects.create(
+            organization=organization,
+            invoice=invoice,
+            customer=invoice.customer,
+            amount=amount,
+            phone_number=phone_number,
+            idempotency_key=idempotency_key,
+            created_by=request.user,
+        )
+
+    try:
+        response = initiate_stk_push(attempt)
+    except DarajaUnavailable:
+        attempt.status = DarajaPaymentAttempt.Status.REVIEW
+        attempt.result_description = "Sandbox credentials are unavailable."
+        attempt.save(update_fields=["status", "result_description", "updated_at"])
+        return _daraja_attempt_response(attempt, status=202)
+    except Exception:
+        # A transport failure can happen after Daraja accepted the prompt. Keep
+        # the amount reserved; do not automatically issue another prompt.
+        attempt.status = DarajaPaymentAttempt.Status.REVIEW
+        attempt.result_description = (
+            "The request outcome is unknown. Review this attempt before retrying."
+        )
+        attempt.save(update_fields=["status", "result_description", "updated_at"])
+        return _daraja_attempt_response(attempt, status=202)
+
+    attempt.checkout_request_id = response["CheckoutRequestID"]
+    attempt.merchant_request_id = str(response.get("MerchantRequestID", ""))[:120]
+    attempt.response_data = response
+    attempt.save(
+        update_fields=[
+            "checkout_request_id",
+            "merchant_request_id",
+            "response_data",
+            "updated_at",
+        ]
+    )
+    early_event = DarajaCallbackEvent.objects.filter(
+        checkout_request_id=attempt.checkout_request_id, attempt__isnull=True
+    ).first()
+    if early_event is not None:
+        early_event.attempt = attempt
+        early_event.save(update_fields=["attempt"])
+        _process_daraja_callback_event(early_event)
+        attempt.refresh_from_db()
+    return _daraja_attempt_response(attempt, status=202)
+
+
+@require_http_methods(["GET"])
+def daraja_payment_attempt_view(request, organization_id, attempt_id):
+    _, error = _membership(request, organization_id)
+    if error:
+        return error
+    attempt = DarajaPaymentAttempt.objects.filter(
+        organization_id=organization_id, pk=attempt_id
+    ).first()
+    if attempt is None:
+        return JsonResponse({"detail": "Payment attempt not found."}, status=404)
+    return _daraja_attempt_response(attempt)
+
+
+@require_http_methods(["POST"])
+def daraja_payment_attempt_reconcile_view(request, organization_id, attempt_id):
+    _, error = _membership(request, organization_id)
+    if error:
+        return error
+    attempt = DarajaPaymentAttempt.objects.filter(
+        organization_id=organization_id, pk=attempt_id
+    ).first()
+    if attempt is None:
+        return JsonResponse({"detail": "Payment attempt not found."}, status=404)
+    if not attempt.checkout_request_id:
+        return JsonResponse(
+            {"detail": "This attempt has no checkout identifier to query."}, status=409
+        )
+    event = DarajaCallbackEvent.objects.filter(attempt=attempt).first()
+    if event is None:
+        return JsonResponse(
+            {"detail": "No callback has been received for this attempt."}, status=409
+        )
+    _process_daraja_callback_event(event)
+    attempt.refresh_from_db()
+    status = (
+        200
+        if attempt.status
+        in (DarajaPaymentAttempt.Status.SUCCEEDED, DarajaPaymentAttempt.Status.FAILED)
+        else 202
+    )
+    return _daraja_attempt_response(attempt, status=status)
+
+
+def _callback_ack():
+    return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
+
+
+def _process_daraja_callback_event(event):
+    attempt = event.attempt
+    if attempt is None or attempt.status in (
+        DarajaPaymentAttempt.Status.SUCCEEDED,
+        DarajaPaymentAttempt.Status.FAILED,
+    ):
+        return
+    try:
+        verified = query_stk_push(event.checkout_request_id)
+    except Exception:
+        return
+    with transaction.atomic():
+        attempt = (
+            DarajaPaymentAttempt.objects.select_for_update()
+            .filter(pk=attempt.pk)
+            .first()
+        )
+        if attempt is None or attempt.status in (
+            DarajaPaymentAttempt.Status.SUCCEEDED,
+            DarajaPaymentAttempt.Status.FAILED,
+        ):
+            return
+
+        # Require Daraja to echo both provider request identifiers. If the
+        # query response omits either identifier, require manual review.
+        if not query_matches_attempt(verified, attempt):
+            attempt.status = DarajaPaymentAttempt.Status.REVIEW
+            attempt.result_description = (
+                "The status response did not match this attempt."
+            )
+            attempt.save(update_fields=["status", "result_description", "updated_at"])
+            return
+        if not is_final_query(verified):
+            return
+
+        result_code = str(verified.get("ResultCode", ""))
+        callback = event.payload
+        if result_code == "0":
+            if not callback_matches_success(callback, attempt, verified):
+                attempt.status = DarajaPaymentAttempt.Status.REVIEW
+                attempt.result_description = "The verified checkout did not match callback amount or phone details."
+                attempt.save(
+                    update_fields=["status", "result_description", "updated_at"]
+                )
+                return
+        elif str(callback.get("ResultCode", "")) != result_code:
+            attempt.status = DarajaPaymentAttempt.Status.REVIEW
+            attempt.result_description = "The callback and status result did not match."
+            attempt.save(update_fields=["status", "result_description", "updated_at"])
+            return
+
+        attempt.result_code = result_code[:40]
+        attempt.result_description = str(verified.get("ResultDesc", ""))[:240]
+        attempt.response_data = verified
+        attempt.status = (
+            DarajaPaymentAttempt.Status.SUCCEEDED
+            if is_successful_query(verified)
+            else DarajaPaymentAttempt.Status.FAILED
+        )
+        attempt.save(
+            update_fields=[
+                "result_code",
+                "result_description",
+                "response_data",
+                "status",
+                "updated_at",
+            ]
+        )
+        DarajaCallbackEvent.objects.filter(pk=event.pk).update(
+            attempt=attempt, processed_at=timezone.now()
+        )
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def daraja_stk_callback_view(request):
+    if not daraja_is_configured():
+        return _callback_ack()
+    payload, error = _payload(request)
+    if error:
+        return _callback_ack()
+    body = payload.get("Body")
+    callback = body.get("stkCallback") if isinstance(body, dict) else None
+    if not isinstance(callback, dict):
+        return _callback_ack()
+    checkout_request_id = callback.get("CheckoutRequestID")
+    if not isinstance(checkout_request_id, str) or not checkout_request_id.strip():
+        return _callback_ack()
+    checkout_request_id = checkout_request_id[:120]
+    callback_metadata = callback.get("CallbackMetadata")
+    items = (
+        callback_metadata.get("Item") if isinstance(callback_metadata, dict) else None
+    )
+    if not isinstance(items, list):
+        items = []
+    item_map = {
+        item.get("Name"): item.get("Value")
+        for item in items
+        if isinstance(items, list)
+        and isinstance(item, dict)
+        and isinstance(item.get("Name"), str)
+    }
+    safe_payload = {
+        "CheckoutRequestID": checkout_request_id,
+        "MerchantRequestID": str(callback.get("MerchantRequestID", ""))[:120],
+        "ResultCode": str(callback.get("ResultCode", ""))[:40],
+        "ResultDesc": str(callback.get("ResultDesc", ""))[:240],
+        "CallbackMetadata": {
+            "Item": [
+                {"Name": "Amount", "Value": item_map.get("Amount")},
+                {
+                    "Name": "PhoneNumberHash",
+                    "Value": phone_number_digest(item_map.get("PhoneNumber")),
+                },
+            ]
+        },
+    }
+    attempt = DarajaPaymentAttempt.objects.filter(
+        checkout_request_id=checkout_request_id
+    ).first()
+    event, created = DarajaCallbackEvent.objects.get_or_create(
+        checkout_request_id=checkout_request_id,
+        defaults={"attempt": attempt, "payload": safe_payload},
+    )
+    if not created:
+        updates = {
+            "delivery_count": F("delivery_count") + 1,
+            "last_received_at": timezone.now(),
+        }
+        if event.attempt_id is None and attempt is not None:
+            updates["attempt"] = attempt
+        DarajaCallbackEvent.objects.filter(pk=event.pk).update(**updates)
+        event.refresh_from_db()
+    _process_daraja_callback_event(event)
+    return _callback_ack()
 
 
 @require_http_methods(["POST"])
