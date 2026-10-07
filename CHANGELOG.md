@@ -2,6 +2,37 @@
 
 <!-- version list -->
 
+## v0.8.0 (2026-10-07)
+
+### Documentation
+
+- **architecture**: Record initial hosting recommendation
+  ([#27](https://github.com/Tridim-Technologies/tridim-business/pull/27),
+  [`fa07a42`](https://github.com/Tridim-Technologies/tridim-business/commit/fa07a4203d40d5fb3d1b78b45d0ee2a0dce6314b))
+
+- **payments**: Define provider sandbox decision
+  ([#24](https://github.com/Tridim-Technologies/tridim-business/pull/24),
+  [`9d82379`](https://github.com/Tridim-Technologies/tridim-business/commit/9d8237946a87f9bf22afc5458cc76f69baed5a73))
+
+- **payments**: Select Daraja for Kenya sandbox
+  ([#29](https://github.com/Tridim-Technologies/tridim-business/pull/29),
+  [`458e0f1`](https://github.com/Tridim-Technologies/tridim-business/commit/458e0f14a9d61d286731ba7e88cd2cb53374e5a9))
+
+- **roadmap**: Mark finance exports shipped
+  ([#22](https://github.com/Tridim-Technologies/tridim-business/pull/22),
+  [`4a3cf2c`](https://github.com/Tridim-Technologies/tridim-business/commit/4a3cf2cbad779a645c3bc18d4f84ea1b5d664df0))
+
+- **security**: Define tenant payment credentials
+  ([#26](https://github.com/Tridim-Technologies/tridim-business/pull/26),
+  [`322e19d`](https://github.com/Tridim-Technologies/tridim-business/commit/322e19dd2ec0b5ee674be4316065cef409ce5f51))
+
+### Features
+
+- **payments**: Add sandbox Daraja M-Pesa Express flow
+  ([#32](https://github.com/Tridim-Technologies/tridim-business/pull/32),
+  [`8f24621`](https://github.com/Tridim-Technologies/tridim-business/commit/8f246213264b51478343e1bd5af615e48314fd96))
+
+
 ## v0.7.0 (2026-10-06)
 
 ### Documentation
