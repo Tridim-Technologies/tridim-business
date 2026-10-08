@@ -387,6 +387,82 @@ class PaymentWorkflowTests(TestCase):
         DARAJA_SHORTCODE="174379",
         DARAJA_PASSKEY="sandbox-passkey",
         DARAJA_CALLBACK_URL="https://example.invalid/api/payments/daraja/sandbox/stk/callback/",
+        DARAJA_UNKNOWN_CALLBACKS_PER_MINUTE=1,
+    )
+    def test_unknown_callback_creation_is_rate_limited(self):
+        url = reverse("daraja-stk-callback")
+        for checkout_id in ("unknown-first", "unknown-second"):
+            response = self.client.post(
+                url,
+                data=json.dumps(
+                    {
+                        "Body": {
+                            "stkCallback": {
+                                "CheckoutRequestID": checkout_id,
+                                "ResultCode": 1,
+                            }
+                        }
+                    }
+                ),
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(DarajaCallbackEvent.objects.count(), 1)
+
+    @override_settings(
+        DARAJA_CONSUMER_KEY="sandbox-key",
+        DARAJA_CONSUMER_SECRET="sandbox-secret",
+        DARAJA_SHORTCODE="174379",
+        DARAJA_PASSKEY="sandbox-passkey",
+        DARAJA_CALLBACK_URL="https://example.invalid/api/payments/daraja/sandbox/stk/callback/",
+        DARAJA_CALLBACK_REQUESTS_PER_IP=1,
+        DARAJA_UNKNOWN_CALLBACKS_PER_MINUTE=10,
+    )
+    def test_callback_request_flood_is_rate_limited_by_client_ip(self):
+        url = reverse("daraja-stk-callback")
+        for checkout_id in ("callback-first", "callback-second"):
+            response = self.client.post(
+                url,
+                data=json.dumps(
+                    {
+                        "Body": {
+                            "stkCallback": {
+                                "CheckoutRequestID": checkout_id,
+                                "ResultCode": 1,
+                            }
+                        }
+                    }
+                ),
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(DarajaCallbackEvent.objects.count(), 1)
+
+    @override_settings(
+        DARAJA_CONSUMER_KEY="sandbox-key",
+        DARAJA_CONSUMER_SECRET="sandbox-secret",
+        DARAJA_SHORTCODE="174379",
+        DARAJA_PASSKEY="sandbox-passkey",
+        DARAJA_CALLBACK_URL="https://example.invalid/api/payments/daraja/sandbox/stk/callback/",
+        DARAJA_CALLBACK_MAX_BODY_BYTES=16,
+    )
+    def test_oversized_callback_is_acknowledged_without_persistence(self):
+        response = self.client.post(
+            reverse("daraja-stk-callback"),
+            data=json.dumps(
+                {"Body": {"stkCallback": {"CheckoutRequestID": "too-large"}}}
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(DarajaCallbackEvent.objects.count(), 0)
+
+    @override_settings(
+        DARAJA_CONSUMER_KEY="sandbox-key",
+        DARAJA_CONSUMER_SECRET="sandbox-secret",
+        DARAJA_SHORTCODE="174379",
+        DARAJA_PASSKEY="sandbox-passkey",
+        DARAJA_CALLBACK_URL="https://example.invalid/api/payments/daraja/sandbox/stk/callback/",
     )
     @patch("invoicing.views.initiate_stk_push")
     @patch("invoicing.views.query_stk_push")
