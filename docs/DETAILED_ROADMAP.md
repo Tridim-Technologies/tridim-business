@@ -2,7 +2,7 @@
 
 **Status:** Founder-directed build sequence; dates and staffing are not committed
 
-**Last updated:** 7 October 2026
+**Last updated:** 8 October 2026
 
 **Product ambition:** Global; Kenya remains a candidate market
 
@@ -78,6 +78,8 @@
 ## M5 — Internal alpha readiness
 
 **Objective:** Support controlled internal use with synthetic records.
+
+**Implementation progress:** Issue #36 reviews tenant and role boundaries across APIs/exports and sensitive logging; it closes employee access to the full customer directory and employee/finance access to quotations. Staff-admin scoping and public endpoint abuse controls remain open in issues #37 and #38. Backup/restore rehearsal, monitoring, and operating instructions are still outstanding.
 
 **Work:** adversarial tenant/role checks across APIs and exports; data export; logs without sensitive data; dependency/update process; backup and restore rehearsal; deployment and incident notes; known gaps.
 

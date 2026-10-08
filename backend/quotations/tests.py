@@ -18,6 +18,9 @@ class QuotationWorkflowTests(TestCase):
         self.owner = user_model.objects.create_user(
             username="owner", password="a-long-test-password"
         )
+        self.admin = user_model.objects.create_user(
+            username="admin", password="a-long-test-password"
+        )
         self.sales = user_model.objects.create_user(
             username="sales", password="a-long-test-password"
         )
@@ -27,6 +30,9 @@ class QuotationWorkflowTests(TestCase):
         self.finance = user_model.objects.create_user(
             username="finance", password="a-long-test-password"
         )
+        self.employee = user_model.objects.create_user(
+            username="employee", password="a-long-test-password"
+        )
         self.outsider = user_model.objects.create_user(
             username="outsider", password="a-long-test-password"
         )
@@ -34,9 +40,11 @@ class QuotationWorkflowTests(TestCase):
         self.other_organization = Organization.objects.create(name="Other Services")
         for user, role in (
             (self.owner, Membership.Role.OWNER),
+            (self.admin, Membership.Role.ADMIN),
             (self.sales, Membership.Role.SALES),
             (self.operations, Membership.Role.OPERATIONS),
             (self.finance, Membership.Role.FINANCE),
+            (self.employee, Membership.Role.EMPLOYEE),
         ):
             Membership.objects.create(
                 user=user, organization=self.organization, role=role
@@ -132,6 +140,22 @@ class QuotationWorkflowTests(TestCase):
         self.assertEqual(
             self.transition(quotation, "accept", self.finance).status_code, 403
         )
+
+    def test_quote_reads_are_limited_to_sales_operations_and_admin_roles(self):
+        quotation = self.create_quotation()
+        detail_url = reverse(
+            "quotation-detail", args=[self.organization.pk, quotation.pk]
+        )
+        for user in (self.owner, self.admin, self.sales, self.operations):
+            with self.subTest(role=user.username):
+                self.client.force_login(user)
+                self.assertEqual(self.client.get(self.list_url).status_code, 200)
+                self.assertEqual(self.client.get(detail_url).status_code, 200)
+        for user in (self.finance, self.employee):
+            with self.subTest(role=user.username):
+                self.client.force_login(user)
+                self.assertEqual(self.client.get(self.list_url).status_code, 403)
+                self.assertEqual(self.client.get(detail_url).status_code, 403)
 
     def test_non_member_cannot_list_or_probe_quote(self):
         quotation = self.create_quotation()
