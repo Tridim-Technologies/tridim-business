@@ -1,5 +1,9 @@
 from django.contrib import admin
 
+from accounts.support_admin import (
+    SupportReadOnlyTabularInline,
+    SupportScopedReadOnlyAdmin,
+)
 from .models import (
     DarajaCallbackEvent,
     DarajaPaymentAttempt,
@@ -9,8 +13,9 @@ from .models import (
 )
 
 
-class InvoiceLineInline(admin.TabularInline):
+class InvoiceLineInline(SupportReadOnlyTabularInline):
     model = InvoiceLine
+    support_scope = "finance"
     extra = 0
     can_delete = False
     readonly_fields = (
@@ -24,7 +29,9 @@ class InvoiceLineInline(admin.TabularInline):
 
 
 @admin.register(Invoice)
-class InvoiceAdmin(admin.ModelAdmin):
+class InvoiceAdmin(SupportScopedReadOnlyAdmin):
+    organization_lookup = "organization_id"
+    support_scope = "finance"
     list_display = (
         "invoice_number",
         "customer",
@@ -70,7 +77,9 @@ class InvoiceAdmin(admin.ModelAdmin):
 
 
 @admin.register(InvoiceSequence)
-class InvoiceSequenceAdmin(admin.ModelAdmin):
+class InvoiceSequenceAdmin(SupportScopedReadOnlyAdmin):
+    organization_lookup = "organization_id"
+    support_scope = "finance"
     list_display = ("organization", "year", "next_number")
     readonly_fields = ("organization", "year", "next_number")
 
@@ -85,7 +94,9 @@ class InvoiceSequenceAdmin(admin.ModelAdmin):
 
 
 @admin.register(DarajaPaymentAttempt)
-class DarajaPaymentAttemptAdmin(admin.ModelAdmin):
+class DarajaPaymentAttemptAdmin(SupportScopedReadOnlyAdmin):
+    organization_lookup = "organization_id"
+    support_scope = "payments"
     list_display = (
         "id",
         "organization",
@@ -103,6 +114,15 @@ class DarajaPaymentAttemptAdmin(admin.ModelAdmin):
     )
     readonly_fields = tuple(field.name for field in DarajaPaymentAttempt._meta.fields)
 
+    def get_fields(self, request, obj=None):
+        if request.user.is_superuser:
+            return super().get_fields(request, obj)
+        return tuple(
+            field.name
+            for field in DarajaPaymentAttempt._meta.fields
+            if field.name not in {"phone_number", "response_data"}
+        )
+
     def has_add_permission(self, request):
         return False
 
@@ -114,7 +134,9 @@ class DarajaPaymentAttemptAdmin(admin.ModelAdmin):
 
 
 @admin.register(DarajaCallbackEvent)
-class DarajaCallbackEventAdmin(admin.ModelAdmin):
+class DarajaCallbackEventAdmin(SupportScopedReadOnlyAdmin):
+    organization_lookup = "attempt__organization_id"
+    support_scope = "payments"
     list_display = (
         "checkout_request_id",
         "attempt",

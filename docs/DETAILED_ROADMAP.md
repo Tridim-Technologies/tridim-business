@@ -79,7 +79,7 @@
 
 **Objective:** Support controlled internal use with synthetic records.
 
-**Implementation progress:** Issue #36 reviews tenant and role boundaries across APIs/exports and sensitive logging; it closes employee access to the full customer directory and employee/finance access to quotations. Staff-admin scoping and public endpoint abuse controls remain open in issues #37 and #38. Backup/restore rehearsal, monitoring, and operating instructions are still outstanding.
+**Implementation progress:** Issue #36 reviews tenant and role boundaries across APIs/exports and sensitive logging; it closes employee access to the full customer directory and employee/finance access to quotations. Issue #37 adds time-limited, purpose-bearing organization/data-scope grants for read-only Django Admin support access and audits support list/detail views. Public endpoint abuse controls remain open in issue #38. Backup/restore rehearsal, monitoring, and operating instructions are still outstanding.
 
 **Work:** adversarial tenant/role checks across APIs and exports; data export; logs without sensitive data; dependency/update process; backup and restore rehearsal; deployment and incident notes; known gaps.
 

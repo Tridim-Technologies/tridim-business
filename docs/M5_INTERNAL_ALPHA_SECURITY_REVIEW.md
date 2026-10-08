@@ -19,13 +19,14 @@ This is an implementation review with regression tests, not an independent penet
 | Finance exports | Exports use the same owner/admin/finance membership gate and organization-scoped querysets. CSV text beginning with formula characters is escaped; responses are private/no-store and carry an as-of timestamp. Tests cover roles, tenant scope, and CSV escaping. |
 | Daraja callbacks | The callback is intentionally public and CSRF-exempt. Only a minimized summary is persisted; the phone number is hashed. A callback alone cannot confirm payment: the app queries Daraja and checks correlation before changing attempt status. Abuse controls and unknown-ID retention are tracked in issue #38. |
 | Sensitive logging | No application logging or print calls were found in backend code. Provider tokens are not stored in attempt response data, and callback phone numbers are not stored in raw form. |
+| Django Admin support access | Non-superuser staff need an active grant for one organization and one data scope; grants require a purpose and expire within eight hours. Admin list/detail reads are audited, and support views are read-only. |
 
 ## Follow-up risks
 
-- Django admin currently relies on `is_staff`; default model admin querysets can expose records across organizations to staff users. Scope staff access and audit support access in [issue #37](https://github.com/Tridim-Technologies/tridim-business/issues/37).
+- Django Admin support grants are managed by platform superusers. Superusers bypass tenant grants and their reads are not recorded by the support-view audit stream; protect those accounts as platform operator credentials.
 - Public login has no application-level throttling, and unknown callback IDs can create persistent callback-event rows. Add instance-safe abuse controls and retention in [issue #38](https://github.com/Tridim-Technologies/tridim-business/issues/38).
 - Before deployment, set `DJANGO_DEBUG=0`, provide a stable `DJANGO_SECRET_KEY`, and configure production host/CSRF settings. The development defaults are not production settings.
 
 ## Validation evidence
 
-The repository test suite already covered cross-tenant customer, quotation, job, invoice, payment, and export behavior, plus finance export restrictions and CSV formula escaping. This review adds tests that employees cannot list the customer directory or read quotations and that finance cannot read quotations, while owner/admin/sales/operations can. Validation passed: all 69 backend tests, Ruff lint/format, Django system and migration checks, `uv lock --check`, Markdown scan, prototype check, and `git diff --check`.
+The repository test suite already covered cross-tenant customer, quotation, job, invoice, payment, and export behavior, plus finance export restrictions and CSV formula escaping. API and export coverage was expanded under issue #36; Django Admin tenant grants, scope restrictions, expiry, read-only access, and audit events are covered under issue #37. Validation is reported with the issue #37 pull request.
