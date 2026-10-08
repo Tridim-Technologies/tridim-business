@@ -1,6 +1,6 @@
 [project]
 name = "tridim-business-tooling"
-version = "0.8.2"
+version = "0.8.3"
 description = "Development and release tooling for Tridim Business"
 requires-python = ">=3.12"
 dependencies = [

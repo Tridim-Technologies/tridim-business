@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.8.3 (2026-10-08)
+
+### Bug Fixes
+
+- **security**: Add public endpoint abuse controls
+  ([#41](https://github.com/Tridim-Technologies/tridim-business/pull/41),
+  [`4b2161d`](https://github.com/Tridim-Technologies/tridim-business/commit/4b2161de2d3c9e15feac046a5b3faa0ae792156a))
+
+
 ## v0.8.2 (2026-10-08)
 
 ### Bug Fixes
