@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v0.8.1 (2026-10-08)
+
+### Bug Fixes
+
+- **authz**: Restrict customer and quotation reads by role
+  ([#39](https://github.com/Tridim-Technologies/tridim-business/pull/39),
+  [`11e5457`](https://github.com/Tridim-Technologies/tridim-business/commit/11e5457bf9fd7a8acb8745c9e0bb0393ea75a8ee))
+
+### Chores
+
+- **deps**: Use published mpesa-sdk release
+  ([#34](https://github.com/Tridim-Technologies/tridim-business/pull/34),
+  [`5186662`](https://github.com/Tridim-Technologies/tridim-business/commit/51866620b9c4924c8ccc7b3788e85bbaf5a679a2))
+
+
 ## v0.8.0 (2026-10-07)
 
 ### Documentation
