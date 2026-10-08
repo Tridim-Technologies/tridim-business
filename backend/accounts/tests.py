@@ -74,6 +74,21 @@ class OrganizationApiTests(TestCase):
         response = self.client.get(reverse("customers", args=[self.other_org.pk]))
         self.assertEqual(response.status_code, 404)
 
+    def test_employee_cannot_list_the_customer_directory(self):
+        employee = get_user_model().objects.create_user(
+            username="employee", password="a-long-test-password"
+        )
+        Membership.objects.create(
+            user=employee, organization=self.org, role=Membership.Role.EMPLOYEE
+        )
+        self.client.force_login(self.finance)
+        self.assertEqual(
+            self.client.get(reverse("customers", args=[self.org.pk])).status_code, 200
+        )
+        self.client.force_login(employee)
+        response = self.client.get(reverse("customers", args=[self.org.pk]))
+        self.assertEqual(response.status_code, 403)
+
     def test_finance_role_cannot_create_customer(self):
         self.client.force_login(self.finance)
         response = self.client.post(

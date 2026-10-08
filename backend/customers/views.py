@@ -10,6 +10,13 @@ from accounts.models import Membership
 from .models import Customer, CustomerStatusHistory
 from .serializers import CustomerSerializer
 
+CUSTOMER_READERS = {
+    Membership.Role.OWNER,
+    Membership.Role.ADMIN,
+    Membership.Role.SALES,
+    Membership.Role.OPERATIONS,
+    Membership.Role.FINANCE,
+}
 WRITERS = {
     Membership.Role.OWNER,
     Membership.Role.ADMIN,
@@ -28,6 +35,13 @@ def customers_view(request, organization_id):
     if membership is None:
         return JsonResponse({"detail": "Organization not found."}, status=404)
     if request.method == "GET":
+        if membership.role not in CUSTOMER_READERS:
+            return JsonResponse(
+                {
+                    "detail": "You do not have permission to view the customer directory."
+                },
+                status=403,
+            )
         customers = Customer.objects.filter(organization_id=organization_id)
         status = request.GET.get("status", Customer.Status.ACTIVE)
         if status in {Customer.Status.ACTIVE, Customer.Status.ARCHIVED}:

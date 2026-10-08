@@ -2,7 +2,7 @@
 
 **Status:** Founder-directed starting scope; market fit and production readiness are not validated
 
-**Last updated:** 7 October 2026
+**Last updated:** 8 October 2026
 
 This backlog turns the existing product plan into an implementation sequence. It does not represent customer commitments or a delivery date.
 
@@ -43,6 +43,8 @@ This backlog turns the existing product plan into an implementation sequence. It
 ## P4 — Evaluation readiness
 
 Before real business data is introduced, choose the actual region and database sizing, document support ownership and recovery objectives, configure monitoring and backup retention, complete a database restore rehearsal and secret rotation/access review, and obtain Safaricom's written approval of the tenant account model before enabling live Daraja connections. Kubernetes is not a prerequisite.
+
+**Implementation progress:** Issue #36 reviews API and finance-export tenant/role boundaries and sensitive logging, and closes customer-directory and quotation read-access gaps for employee/finance roles. Staff Django admin scoping and public login/callback abuse controls remain open in issues #37 and #38. Backup/restore rehearsal, monitoring, support ownership, and recovery instructions remain outstanding.
 
 - Complete organization/role security review, export, backup/restore, monitoring, and recovery documentation.
 - Define a bounded field evaluation, responsibilities, privacy safeguards, rollback, baseline, and support process.

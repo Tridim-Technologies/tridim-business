@@ -20,6 +20,7 @@ from .serializers import QuotationCreateSerializer, QuotationSerializer
 
 QUOTE_WRITERS = {Membership.Role.OWNER, Membership.Role.ADMIN, Membership.Role.SALES}
 ACCEPTORS = {Membership.Role.OWNER, Membership.Role.ADMIN, Membership.Role.OPERATIONS}
+QUOTE_READERS = QUOTE_WRITERS | ACCEPTORS
 TRANSITIONS = {
     Quotation.Status.DRAFT: {"send": Quotation.Status.SENT},
     Quotation.Status.SENT: {
@@ -58,6 +59,11 @@ def quotations_view(request, organization_id):
     if error:
         return error
     if request.method == "GET":
+        if membership.role not in QUOTE_READERS:
+            return JsonResponse(
+                {"detail": "You do not have permission to view quotations."},
+                status=403,
+            )
         quotes = (
             Quotation.objects.filter(organization_id=organization_id)
             .select_related("customer")
@@ -222,9 +228,13 @@ def quotation_revision_view(request, organization_id, quotation_id):
 
 @require_http_methods(["GET"])
 def quotation_detail_view(request, organization_id, quotation_id):
-    _, error = _membership(request, organization_id)
+    membership, error = _membership(request, organization_id)
     if error:
         return error
+    if membership.role not in QUOTE_READERS:
+        return JsonResponse(
+            {"detail": "You do not have permission to view quotations."}, status=403
+        )
     quotation = _quotation(organization_id, quotation_id)
     if quotation is None:
         return JsonResponse({"detail": "Quotation not found."}, status=404)
