@@ -150,3 +150,20 @@ class SupportAccessAuditEvent(models.Model):
 
     def __str__(self):
         return f"{self.access_type}: {self.model_label} at {self.accessed_at:%Y-%m-%d %H:%M UTC}"
+
+
+class EndpointRateLimitBucket(models.Model):
+    """Shared, privacy-preserving counters for public endpoint rate limits."""
+
+    key_digest = models.CharField(max_length=64, primary_key=True)
+    window_started_at = models.DateTimeField()
+    request_count = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        ordering = ["expires_at"]
+
+    def __str__(self):
+        return (
+            f"Endpoint rate-limit bucket expiring {self.expires_at:%Y-%m-%d %H:%M UTC}"
+        )

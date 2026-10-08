@@ -8,12 +8,14 @@ from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.db.models import Prefetch
 from django.http import JsonResponse, StreamingHttpResponse
+from django.conf import settings
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from rest_framework.exceptions import ValidationError
 
 from accounts.models import Membership, Organization
+from accounts.rate_limits import client_address, consume_rate_limit
 from customers.models import Customer
 from quotations.models import Job, Quotation, QuotationLine
 
@@ -73,7 +75,23 @@ def _membership(request, organization_id):
     return membership, None
 
 
-def _payload(request):
+def _payload(request, max_bytes=None):
+    if max_bytes is not None:
+        content_length = request.META.get("CONTENT_LENGTH")
+        if content_length:
+            try:
+                if int(content_length) > max_bytes:
+                    return None, JsonResponse(
+                        {"detail": "Request body is too large."}, status=413
+                    )
+            except ValueError:
+                return None, JsonResponse(
+                    {"detail": "Invalid Content-Length."}, status=400
+                )
+        if len(request.body) > max_bytes:
+            return None, JsonResponse(
+                {"detail": "Request body is too large."}, status=413
+            )
     try:
         payload = json.loads(request.body or b"{}")
     except (json.JSONDecodeError, UnicodeDecodeError):
@@ -798,7 +816,15 @@ def _process_daraja_callback_event(event):
 def daraja_stk_callback_view(request):
     if not daraja_is_configured():
         return _callback_ack()
-    payload, error = _payload(request)
+    allowed, retry_after = consume_rate_limit(
+        "daraja-callback-ip",
+        client_address(request),
+        limit=settings.DARAJA_CALLBACK_REQUESTS_PER_IP,
+        window_seconds=settings.DARAJA_CALLBACK_RATE_WINDOW_SECONDS,
+    )
+    if not allowed:
+        return _callback_ack()
+    payload, error = _payload(request, settings.DARAJA_CALLBACK_MAX_BODY_BYTES)
     if error:
         return _callback_ack()
     body = payload.get("Body")
@@ -808,7 +834,9 @@ def daraja_stk_callback_view(request):
     checkout_request_id = callback.get("CheckoutRequestID")
     if not isinstance(checkout_request_id, str) or not checkout_request_id.strip():
         return _callback_ack()
-    checkout_request_id = checkout_request_id[:120]
+    checkout_request_id = checkout_request_id.strip()
+    if len(checkout_request_id) > 120:
+        return _callback_ack()
     callback_metadata = callback.get("CallbackMetadata")
     items = (
         callback_metadata.get("Item") if isinstance(callback_metadata, dict) else None
@@ -840,10 +868,27 @@ def daraja_stk_callback_view(request):
     attempt = DarajaPaymentAttempt.objects.filter(
         checkout_request_id=checkout_request_id
     ).first()
-    event, created = DarajaCallbackEvent.objects.get_or_create(
-        checkout_request_id=checkout_request_id,
-        defaults={"attempt": attempt, "payload": safe_payload},
-    )
+    event = DarajaCallbackEvent.objects.filter(
+        checkout_request_id=checkout_request_id
+    ).first()
+    if event is None and attempt is None:
+        unknown_allowed, retry_after = consume_rate_limit(
+            "daraja-unknown-callback",
+            "global",
+            limit=settings.DARAJA_UNKNOWN_CALLBACKS_PER_MINUTE,
+            window_seconds=settings.DARAJA_UNKNOWN_CALLBACK_RATE_WINDOW_SECONDS,
+        )
+        if not unknown_allowed:
+            return _callback_ack()
+    try:
+        with transaction.atomic():
+            event, created = DarajaCallbackEvent.objects.get_or_create(
+                checkout_request_id=checkout_request_id,
+                defaults={"attempt": attempt, "payload": safe_payload},
+            )
+    except IntegrityError:
+        event = DarajaCallbackEvent.objects.get(checkout_request_id=checkout_request_id)
+        created = False
     if not created:
         updates = {
             "delivery_count": F("delivery_count") + 1,

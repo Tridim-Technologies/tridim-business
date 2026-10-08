@@ -6,6 +6,18 @@ import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+
+def _positive_int_setting(name, default):
+    try:
+        value = int(os.environ.get(name, default))
+    except ValueError as error:
+        raise ImproperlyConfigured(f"{name} must be a positive integer.") from error
+    if value < 1:
+        raise ImproperlyConfigured(f"{name} must be a positive integer.")
+    return value
+
+
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
@@ -111,3 +123,33 @@ DARAJA_CONSUMER_SECRET = os.environ.get("DARAJA_CONSUMER_SECRET", "")
 DARAJA_SHORTCODE = os.environ.get("DARAJA_SHORTCODE", "")
 DARAJA_PASSKEY = os.environ.get("DARAJA_PASSKEY", "")
 DARAJA_CALLBACK_URL = os.environ.get("DARAJA_CALLBACK_URL", "")
+
+LOGIN_MAX_REQUEST_BYTES = _positive_int_setting("LOGIN_MAX_REQUEST_BYTES", 4096)
+LOGIN_ATTEMPTS_PER_IDENTITY_IP = _positive_int_setting(
+    "LOGIN_ATTEMPTS_PER_IDENTITY_IP", 10
+)
+LOGIN_ATTEMPTS_PER_IP = _positive_int_setting("LOGIN_ATTEMPTS_PER_IP", 300)
+LOGIN_ATTEMPT_WINDOW_SECONDS = _positive_int_setting(
+    "LOGIN_ATTEMPT_WINDOW_SECONDS", 900
+)
+DARAJA_CALLBACK_MAX_BODY_BYTES = _positive_int_setting(
+    "DARAJA_CALLBACK_MAX_BODY_BYTES", 16384
+)
+DARAJA_CALLBACK_REQUESTS_PER_IP = _positive_int_setting(
+    "DARAJA_CALLBACK_REQUESTS_PER_IP", 600
+)
+DARAJA_CALLBACK_RATE_WINDOW_SECONDS = _positive_int_setting(
+    "DARAJA_CALLBACK_RATE_WINDOW_SECONDS", 60
+)
+DARAJA_UNKNOWN_CALLBACKS_PER_MINUTE = _positive_int_setting(
+    "DARAJA_UNKNOWN_CALLBACKS_PER_MINUTE", 300
+)
+DARAJA_UNKNOWN_CALLBACK_RATE_WINDOW_SECONDS = _positive_int_setting(
+    "DARAJA_UNKNOWN_CALLBACK_RATE_WINDOW_SECONDS", 60
+)
+DARAJA_UNKNOWN_CALLBACK_RETENTION_SECONDS = _positive_int_setting(
+    "DARAJA_UNKNOWN_CALLBACK_RETENTION_SECONDS", 300
+)
+ENDPOINT_RATE_LIMIT_BUCKET_RETENTION_SECONDS = _positive_int_setting(
+    "ENDPOINT_RATE_LIMIT_BUCKET_RETENTION_SECONDS", 86400
+)

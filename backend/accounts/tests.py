@@ -1,9 +1,14 @@
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
+from django.test import override_settings
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
 
-from .models import Membership, Organization
+from .models import EndpointRateLimitBucket, Membership, Organization
 from customers.models import Customer
+from invoicing.models import DarajaCallbackEvent
 
 
 class OrganizationApiTests(TestCase):
@@ -43,6 +48,33 @@ class OrganizationApiTests(TestCase):
             response.json()["organizations"],
             [{"id": str(self.org.pk), "name": "Alpha Services", "role": "owner"}],
         )
+
+    @override_settings(LOGIN_ATTEMPTS_PER_IDENTITY_IP=1)
+    def test_login_limits_repeated_identity_ip_attempts(self):
+        first = self.client.post(
+            "/api/session/",
+            data='{"username":"owner","password":"wrong"}',
+            content_type="application/json",
+        )
+        second = self.client.post(
+            "/api/session/",
+            data='{"username":"owner","password":"wrong"}',
+            content_type="application/json",
+        )
+        self.assertEqual(first.status_code, 400)
+        self.assertEqual(second.status_code, 429)
+        self.assertGreater(int(second["Retry-After"]), 0)
+        bucket = EndpointRateLimitBucket.objects.get(request_count=1)
+        self.assertEqual(len(bucket.key_digest), 64)
+
+    @override_settings(LOGIN_MAX_REQUEST_BYTES=8)
+    def test_login_rejects_oversized_body(self):
+        response = self.client.post(
+            "/api/session/",
+            data='{"username":"owner"}',
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 413)
 
     def test_login_requires_csrf_token(self):
         client = Client(enforce_csrf_checks=True)
@@ -145,3 +177,30 @@ class OrganizationApiTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 400)
+
+
+class AbuseRecordCleanupTests(TestCase):
+    @override_settings(DARAJA_UNKNOWN_CALLBACK_RETENTION_SECONDS=300)
+    def test_cleanup_removes_expired_buckets_and_old_orphan_callbacks(self):
+        now = timezone.now()
+        EndpointRateLimitBucket.objects.create(
+            key_digest="a" * 64,
+            window_started_at=now - timedelta(days=2),
+            request_count=1,
+            expires_at=now - timedelta(days=1),
+        )
+        old_event = DarajaCallbackEvent.objects.create(
+            checkout_request_id="orphan-old", payload={}
+        )
+        DarajaCallbackEvent.objects.filter(pk=old_event.pk).update(
+            last_received_at=now - timedelta(hours=1)
+        )
+        recent = DarajaCallbackEvent.objects.create(
+            checkout_request_id="orphan-recent", payload={}
+        )
+
+        call_command("cleanup_abuse_records")
+
+        self.assertFalse(EndpointRateLimitBucket.objects.exists())
+        self.assertFalse(DarajaCallbackEvent.objects.filter(pk=old_event.pk).exists())
+        self.assertTrue(DarajaCallbackEvent.objects.filter(pk=recent.pk).exists())
