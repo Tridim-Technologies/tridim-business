@@ -1,5 +1,9 @@
 from django.contrib import admin
 
+from accounts.support_admin import (
+    SupportReadOnlyTabularInline,
+    SupportScopedReadOnlyAdmin,
+)
 from .models import (
     Job,
     JobAssignment,
@@ -12,20 +16,24 @@ from .models import (
 )
 
 
-class QuotationLineInline(admin.TabularInline):
+class QuotationLineInline(SupportReadOnlyTabularInline):
     model = QuotationLine
+    support_scope = "sales"
     extra = 0
 
 
-class QuotationStatusHistoryInline(admin.TabularInline):
+class QuotationStatusHistoryInline(SupportReadOnlyTabularInline):
     model = QuotationStatusHistory
+    support_scope = "sales"
     extra = 0
     can_delete = False
     readonly_fields = ("previous_status", "status", "actor", "created_at", "note")
 
 
 @admin.register(Quotation)
-class QuotationAdmin(admin.ModelAdmin):
+class QuotationAdmin(SupportScopedReadOnlyAdmin):
+    organization_lookup = "organization_id"
+    support_scope = "sales"
     list_display = ("id", "customer", "organization", "status", "valid_until")
     list_filter = ("organization", "status", "currency")
     search_fields = ("customer__name", "id")
@@ -33,7 +41,9 @@ class QuotationAdmin(admin.ModelAdmin):
 
 
 @admin.register(Job)
-class JobAdmin(admin.ModelAdmin):
+class JobAdmin(SupportScopedReadOnlyAdmin):
+    organization_lookup = "organization_id"
+    support_scope = "delivery"
     list_display = ("id", "customer", "organization", "status", "created_at")
     list_filter = ("organization", "status")
     readonly_fields = (
@@ -51,7 +61,9 @@ class JobAdmin(admin.ModelAdmin):
 
 
 @admin.register(JobStatusHistory)
-class JobStatusHistoryAdmin(admin.ModelAdmin):
+class JobStatusHistoryAdmin(SupportScopedReadOnlyAdmin):
+    organization_lookup = "job__organization_id"
+    support_scope = "delivery"
     list_display = ("job", "previous_status", "status", "actor", "created_at")
     readonly_fields = (
         "job",
@@ -73,7 +85,9 @@ class JobStatusHistoryAdmin(admin.ModelAdmin):
 
 
 @admin.register(JobDueDateHistory)
-class JobDueDateHistoryAdmin(admin.ModelAdmin):
+class JobDueDateHistoryAdmin(SupportScopedReadOnlyAdmin):
+    organization_lookup = "job__organization_id"
+    support_scope = "delivery"
     list_display = ("job", "previous_due_date", "due_date", "actor", "created_at")
 
     def has_add_permission(self, request):
@@ -87,7 +101,9 @@ class JobDueDateHistoryAdmin(admin.ModelAdmin):
 
 
 @admin.register(JobAssignment)
-class JobAssignmentAdmin(admin.ModelAdmin):
+class JobAssignmentAdmin(SupportScopedReadOnlyAdmin):
+    organization_lookup = "job__organization_id"
+    support_scope = "delivery"
     list_display = ("job", "user", "assigned_by", "assigned_at", "unassigned_at")
     readonly_fields = (
         "job",
@@ -109,7 +125,9 @@ class JobAssignmentAdmin(admin.ModelAdmin):
 
 
 @admin.register(JobNote)
-class JobNoteAdmin(admin.ModelAdmin):
+class JobNoteAdmin(SupportScopedReadOnlyAdmin):
+    organization_lookup = "job__organization_id"
+    support_scope = "delivery"
     list_display = ("job", "author", "created_at")
     readonly_fields = ("job", "author", "content", "created_at")
 
