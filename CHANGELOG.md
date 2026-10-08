@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.8.2 (2026-10-08)
+
+### Bug Fixes
+
+- **admin**: Scope staff access to tenant grants
+  ([#40](https://github.com/Tridim-Technologies/tridim-business/pull/40),
+  [`0aad7ba`](https://github.com/Tridim-Technologies/tridim-business/commit/0aad7ba087e6ed7b9293c6a7e8ba49a3ee6b335b))
+
+
 ## v0.8.1 (2026-10-08)
 
 ### Bug Fixes
