@@ -62,10 +62,10 @@ retried automatically; review it before doing anything else.
 
 ## Safety boundary
 
-- The published SDK calls the STK operations
-  `lipa_na_mpesa_online_payment` and `lipa_na_mpesa_online_query`; the pinned
-  SDK revision also exposes the clearer `mpesa_express_payment` and
-  `mpesa_express_query` names.
+- The app installs `mpesa-sdk` 1.1.0 or a compatible later 1.x release from
+  PyPI. It calls `mpesa_express_payment` and `mpesa_express_query`; the SDK
+  retains `lipa_na_mpesa_online_payment` and `lipa_na_mpesa_online_query` as
+  compatibility aliases.
 - The app uses the SDK's M-Pesa Express query. It does not use the separate
   generic `transation_status_request` method for STK status.
 - Callback data is not treated as authentication. Only the authenticated

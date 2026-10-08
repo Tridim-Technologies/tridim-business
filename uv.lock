@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -414,9 +414,13 @@ wheels = [
 [[package]]
 name = "mpesa-sdk"
 version = "1.1.0"
-source = { git = "https://github.com/sartim/mpesa-sdk.git?rev=8f25c2508456aff5dcfd7b1547c776f0b1dce04f#8f25c2508456aff5dcfd7b1547c776f0b1dce04f" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/36/b8/8d7445c0e8f766af2d2e7b73936fd3450558fbb940f6020465eeefd73d05/mpesa_sdk-1.1.0.tar.gz", hash = "sha256:47fd6e7eb5efdd5b9043d94a05949b5f3c7e07806b2005e552a1e051c6f6a5b4", size = 13109, upload-time = "2026-10-08T09:05:57.775Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/4a/d2a273b95201da04a11e9a3febe00e613ac2f723bc8ab57afc0f83dc7eac/mpesa_sdk-1.1.0-py3-none-any.whl", hash = "sha256:4a13bec7e6c738863a3b5ed046aa82cee41c8dddc90f3d705917af91547f2710", size = 9830, upload-time = "2026-10-08T09:05:56.871Z" },
 ]
 
 [[package]]
@@ -993,7 +997,7 @@ requires-dist = [
     { name = "dj-database-url", specifier = ">=2.3,<3" },
     { name = "django", specifier = ">=6.0,<6.1" },
     { name = "djangorestframework", specifier = ">=3.16,<4" },
-    { name = "mpesa-sdk", git = "https://github.com/sartim/mpesa-sdk.git?rev=8f25c2508456aff5dcfd7b1547c776f0b1dce04f" },
+    { name = "mpesa-sdk", specifier = ">=1.1.0,<2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
 ]
 
