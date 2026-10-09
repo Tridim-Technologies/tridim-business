@@ -13,7 +13,8 @@ This repository contains the internal alpha foundation and planning documents. S
 3. Review [`docs/VALIDATION_PLAN.md`](docs/VALIDATION_PLAN.md) for build checks and later field-evaluation readiness.
 4. Review [`docs/ADR-001-FOUNDATION.md`](docs/ADR-001-FOUNDATION.md) for the accepted initial platform decision.
 5. Read [`docs/DARAJA_SANDBOX.md`](docs/DARAJA_SANDBOX.md) before configuring the sandbox M-Pesa Express flow.
-6. Open [`prototype/job-to-cash/index.html`](prototype/job-to-cash/index.html) for the sample workflow concept.
+6. Review [`docs/DATABASE_BACKUP_AND_RESTORE.md`](docs/DATABASE_BACKUP_AND_RESTORE.md) for the PostgreSQL recovery runbook and local synthetic rehearsal.
+7. Open [`prototype/job-to-cash/index.html`](prototype/job-to-cash/index.html) for the sample workflow concept.
 
 ## Scope
 
