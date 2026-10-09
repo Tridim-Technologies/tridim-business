@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v0.9.0 (2026-10-09)
+
+### Documentation
+
+- **ops**: Add PostgreSQL backup and restore rehearsal
+  ([#43](https://github.com/Tridim-Technologies/tridim-business/pull/43),
+  [`1999c80`](https://github.com/Tridim-Technologies/tridim-business/commit/1999c8084247b5e421634bb55b2729cd35d21401))
+
+### Features
+
+- **ops**: Add health checks and incident runbook
+  ([#45](https://github.com/Tridim-Technologies/tridim-business/pull/45),
+  [`990879f`](https://github.com/Tridim-Technologies/tridim-business/commit/990879f6255f54167fbf4fae62d9604e869245a1))
+
+
 ## v0.8.3 (2026-10-08)
 
 ### Bug Fixes
