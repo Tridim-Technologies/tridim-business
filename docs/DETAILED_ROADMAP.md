@@ -79,9 +79,9 @@
 
 **Objective:** Support controlled internal use with synthetic records.
 
-**Implementation progress:** Issue #36 reviews tenant and role boundaries across APIs/exports and sensitive logging; it closes employee access to the full customer directory and employee/finance access to quotations. Issue #37 adds time-limited, purpose-bearing organization/data-scope grants for read-only Django Admin support access and audits support list/detail views. Issue #38 implements database-shared login/callback limits, bounded payloads, unmatched-callback retention, and a cleanup command. Backup/restore rehearsal, monitoring, and operating instructions are still outstanding.
+**Implementation progress:** Issue #36 reviews tenant and role boundaries across APIs/exports and sensitive logging; it closes employee access to the full customer directory and employee/finance access to quotations. Issue #37 adds time-limited, purpose-bearing organization/data-scope grants for read-only Django Admin support access and audits support list/detail views. Issue #38 implements database-shared login/callback limits, bounded payloads, unmatched-callback retention, and a cleanup command. Issue #42 adds a PostgreSQL backup/restore runbook and a verified local synthetic-data rehearsal. Hosted backup/PITR configuration, RPO/RTO, retention, monitoring, support ownership, and recovery cutover remain outstanding.
 
-**Work:** adversarial tenant/role checks across APIs and exports; data export; logs without sensitive data; dependency/update process; backup and restore rehearsal; deployment and incident notes; known gaps.
+**Work:** adversarial tenant/role checks across APIs and exports; data export; logs without sensitive data; dependency/update process; deployment-specific backup and restore rehearsal; monitoring; deployment and incident notes; known gaps.
 
 **Exit:** synthetic core journeys pass; export is usable; recovery procedure is rehearsed; critical security and financial invariants have automated coverage.
 
