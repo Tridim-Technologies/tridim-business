@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import path
+from health.views import health_live_view, health_ready_view
 
 from accounts.views import csrf_token, session_view, organizations_view
 from customers.views import customer_detail_view, customers_view
@@ -32,6 +33,8 @@ from invoicing.views import (
 )
 
 urlpatterns = [
+    path("health/live/", health_live_view, name="health-live"),
+    path("health/ready/", health_ready_view, name="health-ready"),
     path("admin/", admin.site.urls),
     path("api/csrf/", csrf_token),
     path("api/session/", session_view),

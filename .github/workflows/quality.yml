@@ -41,7 +41,7 @@ jobs:
       - name: Lint and format Python
         run: uv run ruff check backend && uv run ruff format --check backend
       - name: Test Django APIs, organization permissions and invoicing
-        run: uv run python backend/manage.py test accounts customers quotations invoicing
+        run: uv run python backend/manage.py test accounts customers quotations invoicing health
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
