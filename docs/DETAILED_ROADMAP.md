@@ -2,7 +2,7 @@
 
 **Status:** Founder-directed build sequence; dates and staffing are not committed
 
-**Last updated:** 8 October 2026
+**Last updated:** 9 October 2026
 
 **Product ambition:** Global; Kenya remains a candidate market
 
@@ -79,7 +79,7 @@
 
 **Objective:** Support controlled internal use with synthetic records.
 
-**Implementation progress:** Issue #36 reviews tenant and role boundaries across APIs/exports and sensitive logging; it closes employee access to the full customer directory and employee/finance access to quotations. Issue #37 adds time-limited, purpose-bearing organization/data-scope grants for read-only Django Admin support access and audits support list/detail views. Issue #38 implements database-shared login/callback limits, bounded payloads, unmatched-callback retention, and a cleanup command. Issue #42 adds a PostgreSQL backup/restore runbook and a verified local synthetic-data rehearsal. Hosted backup/PITR configuration, RPO/RTO, retention, monitoring, support ownership, and recovery cutover remain outstanding.
+**Implementation progress:** Issue #36 reviews tenant and role boundaries across APIs/exports and sensitive logging; it closes employee access to the full customer directory and employee/finance access to quotations. Issue #37 adds time-limited, purpose-bearing organization/data-scope grants for read-only Django Admin support access and audits support list/detail views. Issue #38 implements database-shared login/callback limits, bounded payloads, unmatched-callback retention, and a cleanup command. Issue #42 adds a PostgreSQL backup/restore runbook and a verified local synthetic-data rehearsal. Issue #44 adds minimal liveness/readiness endpoints and this provider-neutral monitoring/incident runbook. Hosted backup/PITR configuration, RPO/RTO, retention, deployment-specific alert wiring, named support ownership, and recovery cutover remain outstanding.
 
 **Work:** adversarial tenant/role checks across APIs and exports; data export; logs without sensitive data; dependency/update process; deployment-specific backup and restore rehearsal; monitoring; deployment and incident notes; known gaps.
 
