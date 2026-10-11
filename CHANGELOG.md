@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.10.0 (2026-10-11)
+
+### Features
+
+- **jobs**: Add time entry submission and approval
+  ([#48](https://github.com/Tridim-Technologies/tridim-business/pull/48),
+  [`c92c49d`](https://github.com/Tridim-Technologies/tridim-business/commit/c92c49db57d922faaaf676bce4e3e6a8705ca1e3))
+
+
 ## v0.9.0 (2026-10-09)
 
 ### Documentation
