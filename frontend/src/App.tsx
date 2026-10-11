@@ -16,6 +16,11 @@ type Job = {
   assignments: { id: number; user: string; assigned_by: string; assigned_at: string; unassigned_by: string | null; unassigned_at: string | null }[]
   notes: { id: number; author: string; content: string; created_at: string }[]; created_at: string
 }
+type TimeEntry = {
+  id: number; employee: string; work_date: string; hours: string; description: string
+  status: 'submitted' | 'approved' | 'rejected'; created_at: string; updated_at: string
+  history: { previous_status: string; status: string; actor: string; work_date: string; hours: string; description: string; reason: string; created_at: string }[]
+}
 type Invoice = {
   id: string; invoice_number: string; job_id: number; customer_id: number; customer_name: string; source_quotation_id: string
   status: 'issued' | 'void'; issue_date: string; due_date: string; currency: string; total: string
@@ -69,6 +74,7 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [quotations, setQuotations] = useState<Quote[]>([])
   const [jobs, setJobs] = useState<Job[]>([])
+  const [timeEntries, setTimeEntries] = useState<Record<number, TimeEntry[]>>({})
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [financeCustomers, setFinanceCustomers] = useState<Customer[]>([])
@@ -92,6 +98,7 @@ export default function App() {
 
   const activeOrg = session?.organizations?.find((item) => item.id === organization)
   const canViewInvoices = ['owner', 'admin', 'finance'].includes(activeOrg?.role || '')
+  const canViewTimeEntries = ['owner', 'admin', 'operations', 'employee'].includes(activeOrg?.role || '')
 
   const refreshData = useCallback(async () => {
     if (!organization) return
@@ -103,12 +110,18 @@ export default function App() {
       canViewInvoices ? api<{ results: Payment[] }>(`/api/organizations/${organization}/payments/`) : Promise.resolve({ results: [] as Payment[] }),
       canViewInvoices ? api<{ results: Customer[] }>(`/api/organizations/${organization}/customers/?status=all`) : Promise.resolve({ results: [] as Customer[] }),
     ])
-    setCustomers(customerData.results); setQuotations(quoteData.results); setJobs(jobData.results); setInvoices(invoiceData.results); setPayments(paymentData.results); setFinanceCustomers(financeCustomerData.results); setError('')
-  }, [organization, customerStatus, customerSearch, canViewInvoices])
+    const timeEntryResults = canViewTimeEntries
+      ? await Promise.all(jobData.results.map(async (job) => {
+        const result = await api<{ results: TimeEntry[] }>(`/api/organizations/${organization}/jobs/${job.id}/time-entries/`)
+        return [job.id, result.results] as const
+      }))
+      : []
+    setCustomers(customerData.results); setQuotations(quoteData.results); setJobs(jobData.results); setTimeEntries(Object.fromEntries(timeEntryResults)); setInvoices(invoiceData.results); setPayments(paymentData.results); setFinanceCustomers(financeCustomerData.results); setError('')
+  }, [organization, customerStatus, customerSearch, canViewInvoices, canViewTimeEntries])
 
   useEffect(() => { refreshSession().catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false)) }, [])
   useEffect(() => {
-    if (!session?.authenticated || !organization) { setCustomers([]); setQuotations([]); setJobs([]); setInvoices([]); return }
+    if (!session?.authenticated || !organization) { setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setInvoices([]); return }
     refreshData().catch((reason: Error) => setError(reason.message))
   }, [session, organization, refreshData])
 
@@ -197,6 +210,42 @@ export default function App() {
     try {
       await api(`/api/organizations/${organization}/jobs/${job.id}/notes/`, { method: 'POST', headers: csrfHeader(), body: JSON.stringify({ content: form.get('content') }) })
       formElement.reset(); await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function addTimeEntry(event: FormEvent<HTMLFormElement>, job: Job) {
+    event.preventDefault(); setError(''); setSaving(true)
+    const formElement = event.currentTarget; const form = new FormData(formElement)
+    try {
+      await api(`/api/organizations/${organization}/jobs/${job.id}/time-entries/`, {
+        method: 'POST', headers: csrfHeader(),
+        body: JSON.stringify({ work_date: form.get('work_date'), hours: form.get('hours'), description: form.get('description') }),
+      })
+      formElement.reset(); await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function reviewTimeEntry(event: FormEvent<HTMLFormElement> | undefined, job: Job, entry: TimeEntry, action: 'approve' | 'reject') {
+    event?.preventDefault(); setError(''); setSaving(true)
+    const form = event ? new FormData(event.currentTarget) : null
+    try {
+      await api(`/api/organizations/${organization}/jobs/${job.id}/time-entries/${entry.id}/review/`, {
+        method: 'POST', headers: csrfHeader(),
+        body: JSON.stringify({ action, reason: form?.get('reason') || '' }),
+      })
+      await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function resubmitTimeEntry(event: FormEvent<HTMLFormElement>, job: Job, entry: TimeEntry) {
+    event.preventDefault(); setError(''); setSaving(true)
+    const formElement = event.currentTarget; const form = new FormData(formElement)
+    try {
+      await api(`/api/organizations/${organization}/jobs/${job.id}/time-entries/${entry.id}/resubmit/`, {
+        method: 'POST', headers: csrfHeader(),
+        body: JSON.stringify({ work_date: form.get('work_date'), hours: form.get('hours'), description: form.get('description') }),
+      })
+      await refreshData()
     } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
   }
 
@@ -293,7 +342,7 @@ export default function App() {
 
   async function signOut() {
     await api('/api/session/', { method: 'DELETE', headers: csrfHeader() })
-    setSession({ authenticated: false }); setCustomers([]); setQuotations([]); setJobs([]); setInvoices([]); setPayments([]); setFinanceCustomers([])
+    setSession({ authenticated: false }); setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setInvoices([]); setPayments([]); setFinanceCustomers([])
   }
 
   if (loading) return <main className="loading">Loading your workspace…</main>
@@ -322,7 +371,7 @@ export default function App() {
       </nav>
       <div className="sidebar-bottom"><span className="avatar">{session.user?.username.slice(0, 1).toUpperCase()}</span><div className="user-label"><strong>{session.user?.username}</strong><small>{activeOrg?.role || 'Member'}</small></div><button className="icon-button" onClick={signOut} aria-label="Sign out">↗</button></div>
     </aside>
-    <main className="main-area"><header className="topbar"><div><span className="breadcrumb">Workspace</span><span className="slash">/</span> {label}</div><div className="top-actions"><select aria-label="Organization" value={organization} onChange={(event) => { setOrganization(event.target.value); setCustomers([]); setQuotations([]); setJobs([]); setInvoices([]) }}>{session.organizations?.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}</select><span className="avatar small">{session.user?.username.slice(0, 1).toUpperCase()}</span></div></header>
+    <main className="main-area"><header className="topbar"><div><span className="breadcrumb">Workspace</span><span className="slash">/</span> {label}</div><div className="top-actions"><select aria-label="Organization" value={organization} onChange={(event) => { setOrganization(event.target.value); setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setInvoices([]) }}>{session.organizations?.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}</select><span className="avatar small">{session.user?.username.slice(0, 1).toUpperCase()}</span></div></header>
       <div className="content">
         {page === 'customers' ? <>
           <div className="page-heading"><div><p className="eyebrow">RELATIONSHIPS</p><h1>Customers</h1><p className="muted">Keep the people and businesses you work with in one place.</p></div><span className="count-pill">{customers.length} {customers.length === 1 ? 'customer' : 'customers'}</span></div>
@@ -391,6 +440,16 @@ export default function App() {
                   <label>Invoice due date<input type="date" name="due_date" aria-label={`Invoice due date for job ${job.id}`} min={dateInputValue(new Date())} defaultValue={dateInputValue(new Date(Date.now() + 30 * 86400000))} required /></label><button className="primary" disabled={saving}>{voidedInvoice ? 'Issue replacement invoice' : 'Issue invoice'} <span>＋</span></button>
                 </form>)}
                 <div className="job-assignments"><h3>Assigned team</h3>{activeAssignments.length ? activeAssignments.map((assignment) => <div className="assignment-chip" key={assignment.id}><span>{assignment.user}</span>{canManageJobs && <button className="quiet-action" disabled={saving} onClick={() => removeJobAssignment(job, assignment.id)}>Unassign</button>}</div>) : <p className="form-note">No team members assigned yet.</p>}{canManageJobs && <form className="job-inline-form" onSubmit={(event) => addJobAssignment(event, job)}><input name="username" placeholder="Organization member username" aria-label={`Assign member to job ${job.id}`} required /><button className="quiet-action" disabled={saving}>Assign</button></form>}</div>
+                {canViewTimeEntries && <section className="job-time-entries"><h3>Time entries</h3>
+                  {(timeEntries[job.id] || []).length ? <div className="time-entry-list">{timeEntries[job.id].map((entry) => <article className="time-entry" key={entry.id}>
+                    <div className="time-entry-top"><strong>{entry.work_date} · {entry.hours} hours</strong><span className={`quote-status ${entry.status}`}>{entry.status}</span></div>
+                    <p>{entry.description || 'No work description'} · {entry.employee}</p>
+                    {canManageJobs && entry.status === 'submitted' && <div className="time-entry-actions"><button className="quiet-action" disabled={saving} onClick={() => reviewTimeEntry(undefined, job, entry, 'approve')}>Approve</button><form onSubmit={(event) => reviewTimeEntry(event, job, entry, 'reject')}><input name="reason" maxLength={240} placeholder="Reason to reject" aria-label={`Reason to reject time entry ${entry.id}`} required /><button className="quiet-action" disabled={saving}>Reject</button></form></div>}
+                    {!canManageJobs && entry.status === 'rejected' && entry.employee === session.user?.username && <form className="time-entry-form time-entry-resubmit" onSubmit={(event) => resubmitTimeEntry(event, job, entry)}><label>Work date<input type="date" name="work_date" defaultValue={entry.work_date} max={dateInputValue(new Date())} required /></label><label>Hours<input type="number" name="hours" min="0.01" max="24" step="0.01" defaultValue={entry.hours} required /></label><label>Description<input name="description" maxLength={1000} defaultValue={entry.description} /></label><button className="quiet-action" disabled={saving}>Correct and resubmit</button></form>}
+                    {entry.history.length > 1 && <details className="time-entry-history"><summary>Review history</summary>{entry.history.map((item, index) => <div key={`${entry.id}-history-${index}`}>{item.previous_status || 'new'} → {item.status} · {item.actor} · {item.work_date} · {item.hours} hours{item.reason ? ` · ${item.reason}` : ''}{item.description ? ` · ${item.description}` : ''}</div>)}</details>}
+                  </article>)}</div> : <p className="form-note">No time entries submitted yet.</p>}
+                  {job.status !== 'cancelled' && activeAssignments.some((assignment) => assignment.user === session.user?.username) && <form className="time-entry-form" onSubmit={(event) => addTimeEntry(event, job)}><label>Work date<input type="date" name="work_date" defaultValue={dateInputValue(new Date())} max={dateInputValue(new Date())} required /></label><label>Hours<input type="number" name="hours" min="0.01" max="24" step="0.01" placeholder="e.g. 7.5" required /></label><label>Work description<input name="description" maxLength={1000} placeholder="What work was completed?" /></label><button className="primary" disabled={saving}>Submit time <span>＋</span></button></form>}
+                </section>}
                 {(job.status_history.length > 0 || job.due_date_history.length > 0 || job.assignments.length > activeAssignments.length) && <details className="job-history"><summary>View delivery history</summary>{job.status_history.map((entry, index) => <div key={`status-${index}`}>{entry.previous_status || 'created'} → {entry.status} · {entry.actor} · {new Date(entry.created_at).toLocaleString()}{entry.note ? ` · ${entry.note}` : ''}</div>)}{job.due_date_history.map((entry, index) => <div key={`date-${index}`}>Due date {entry.previous_due_date || 'unset'} → {entry.due_date || 'unset'} · {entry.actor} · {new Date(entry.created_at).toLocaleString()}</div>)}{job.assignments.filter((assignment) => assignment.unassigned_at).map((assignment) => <div key={`assignment-${assignment.id}`}>{assignment.user} assigned by {assignment.assigned_by} · unassigned by {assignment.unassigned_by} · {new Date(assignment.unassigned_at!).toLocaleString()}</div>)}</details>}
                 <div className="job-notes"><h3>Delivery notes</h3>{job.notes.map((note) => <div className="job-note" key={note.id}><p>{note.content}</p><span>{note.author} · {new Date(note.created_at).toLocaleString()}</span></div>)}{canWriteJobNotes && <form className="job-note-form" onSubmit={(event) => addJobNote(event, job)}><textarea name="content" placeholder="Add a delivery update" maxLength={2000} required /><button className="primary" disabled={saving}>Add note <span>＋</span></button></form>}</div>
               </article>
