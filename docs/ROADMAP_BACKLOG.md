@@ -2,7 +2,7 @@
 
 **Status:** Founder-directed starting scope; market fit and production readiness are not validated
 
-**Last updated:** 8 October 2026
+**Last updated:** 11 October 2026
 
 This backlog turns the existing product plan into an implementation sequence. It does not represent customer commitments or a delivery date.
 
@@ -29,7 +29,7 @@ This backlog turns the existing product plan into an implementation sequence. It
 - Provide owner/finance views for open jobs and issued invoice totals with due dates. Show an outstanding balance only after payment allocations are tracked.
 - **Acceptance:** synthetic scenarios produce explainable job and issued-invoice states; any balance is based on recorded allocations, and the app does not imply full accounting.
 
-**Implementation progress:** P2 is complete in v0.5.0. Issue #11 shipped auditable job status, assignments, due dates, and delivery notes; issue #13 shipped the internal invoice register with per-organization annual numbering, void-and-reissue history, and owner/finance invoice visibility. Tax, payment allocation, and jurisdictional compliance are outside P2.
+**Implementation progress:** P2 delivered job delivery and invoicing in v0.5.0. Issue #11 shipped auditable job status, assignments, due dates, and delivery notes; issue #13 shipped the internal invoice register with per-organization annual numbering, void-and-reissue history, and owner/finance invoice visibility. Issue #47 adds assigned-staff time entry and manager approval. Expense claims remain outstanding because safe receipt evidence handling is not designed yet. Tax, payment allocation, and jurisdictional compliance are outside P2.
 
 ## P3 — Payments and reconciliation
 

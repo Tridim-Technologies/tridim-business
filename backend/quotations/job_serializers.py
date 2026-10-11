@@ -1,6 +1,17 @@
-from rest_framework import serializers
+from decimal import Decimal
 
-from .models import Job, JobAssignment, JobDueDateHistory, JobNote, JobStatusHistory
+from rest_framework import serializers
+from django.utils import timezone
+
+from .models import (
+    Job,
+    JobAssignment,
+    JobDueDateHistory,
+    JobNote,
+    JobStatusHistory,
+    JobTimeEntry,
+    JobTimeEntryHistory,
+)
 
 
 class JobStatusHistorySerializer(serializers.ModelSerializer):
@@ -91,3 +102,71 @@ class JobAssignmentCreateSerializer(serializers.Serializer):
 
 class JobNoteCreateSerializer(serializers.Serializer):
     content = serializers.CharField(max_length=2000, trim_whitespace=True)
+
+
+class JobTimeEntryWriteSerializer(serializers.Serializer):
+    work_date = serializers.DateField()
+    hours = serializers.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        max_value=Decimal("24.00"),
+    )
+    description = serializers.CharField(
+        max_length=1000, required=False, allow_blank=True, trim_whitespace=True
+    )
+
+    def validate_work_date(self, value):
+        if value > timezone.localdate():
+            raise serializers.ValidationError("Work date cannot be in the future.")
+        return value
+
+
+class JobTimeEntryReviewSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=("approve", "reject"))
+    reason = serializers.CharField(max_length=240, required=False, allow_blank=True)
+
+    def validate(self, attrs):
+        if attrs["action"] == "reject" and not attrs.get("reason", "").strip():
+            raise serializers.ValidationError(
+                {"reason": "Provide a reason when rejecting a time entry."}
+            )
+        attrs["reason"] = attrs.get("reason", "").strip()
+        return attrs
+
+
+class JobTimeEntryHistorySerializer(serializers.ModelSerializer):
+    actor = serializers.CharField(source="actor.get_username", read_only=True)
+
+    class Meta:
+        model = JobTimeEntryHistory
+        fields = (
+            "previous_status",
+            "status",
+            "actor",
+            "work_date",
+            "hours",
+            "description",
+            "reason",
+            "created_at",
+        )
+
+
+class JobTimeEntrySerializer(serializers.ModelSerializer):
+    employee = serializers.CharField(source="employee.get_username", read_only=True)
+    history = JobTimeEntryHistorySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = JobTimeEntry
+        fields = (
+            "id",
+            "employee",
+            "work_date",
+            "hours",
+            "description",
+            "status",
+            "created_at",
+            "updated_at",
+            "history",
+        )
+        read_only_fields = fields

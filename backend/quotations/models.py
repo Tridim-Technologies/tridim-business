@@ -197,3 +197,51 @@ class JobNote(models.Model):
 
     class Meta:
         ordering = ["created_at", "id"]
+
+
+class JobTimeEntry(models.Model):
+    class Status(models.TextChoices):
+        SUBMITTED = "submitted", "Submitted"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="time_entries")
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="job_time_entries",
+    )
+    work_date = models.DateField()
+    hours = models.DecimalField(max_digits=4, decimal_places=2)
+    description = models.CharField(max_length=1000, blank=True)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.SUBMITTED
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-work_date", "-created_at", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(hours__gt=0) & models.Q(hours__lte=24),
+                name="job_time_entry_hours_valid",
+            )
+        ]
+
+
+class JobTimeEntryHistory(models.Model):
+    entry = models.ForeignKey(
+        JobTimeEntry, on_delete=models.CASCADE, related_name="history"
+    )
+    previous_status = models.CharField(max_length=12, blank=True)
+    status = models.CharField(max_length=12, choices=JobTimeEntry.Status.choices)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    work_date = models.DateField()
+    hours = models.DecimalField(max_digits=4, decimal_places=2)
+    description = models.CharField(max_length=1000, blank=True)
+    reason = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]

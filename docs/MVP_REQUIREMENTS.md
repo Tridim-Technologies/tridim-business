@@ -1,7 +1,7 @@
 # MVP Requirements
 
 **Status:** Draft scope for validation and prototype; not an implementation commitment  
-**Last updated:** 6 October 2026
+**Last updated:** 11 October 2026
 
 ## Product boundary
 
@@ -44,7 +44,9 @@ These are starting profiles, not substitutes for organization-scoped policy. Eac
 
 - An accepted job has an owner, status, planned work, assigned staff and customer link.
 - Manager assigns or reassigns staff; changes are visible to affected users and retained in history.
-- Employees submit time and expense entries against authorized jobs with date, amount, currency and required evidence.
+- Employees submit time entries for assigned jobs. Expense claims will record date, amount, currency, and reviewable evidence once their workflow and private evidence handling are defined.
+- Job time entries are submitted by assigned staff with work date, hours, and an optional work description. Owner/admin/operations roles approve or reject with a reason; corrections preserve prior submission and review history. Hours are operational records and do not automatically create invoice charges or accounting entries.
+- Expense claims and receipt evidence remain unimplemented. Define private evidence collection, access, retention, and deletion before building uploads or using expense records.
 - Managers approve, reject with reason, or request correction. Submitted entries are not silently overwritten.
 - Approved costs are available for job reporting and invoicing decisions but are not automatically treated as accounting expenses without an agreed accounting design.
 

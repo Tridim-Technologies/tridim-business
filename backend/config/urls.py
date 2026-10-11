@@ -16,6 +16,9 @@ from quotations.job_views import (
     job_detail_view,
     job_note_create_view,
     jobs_view,
+    job_time_entries_view,
+    job_time_entry_resubmit_view,
+    job_time_entry_review_view,
 )
 from invoicing.views import (
     finance_export_view,
@@ -98,6 +101,21 @@ urlpatterns = [
         "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/notes/",
         job_note_create_view,
         name="job-note-create",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/time-entries/",
+        job_time_entries_view,
+        name="job-time-entries",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/time-entries/<int:entry_id>/review/",
+        job_time_entry_review_view,
+        name="job-time-entry-review",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/time-entries/<int:entry_id>/resubmit/",
+        job_time_entry_resubmit_view,
+        name="job-time-entry-resubmit",
     ),
     path(
         "api/organizations/<uuid:organization_id>/invoices/",
