@@ -1,7 +1,7 @@
 # MVP Requirements
 
 **Status:** Draft scope for validation and prototype; not an implementation commitment  
-**Last updated:** 11 October 2026
+**Last updated:** 14 October 2026
 
 ## Product boundary
 
@@ -44,10 +44,12 @@ These are starting profiles, not substitutes for organization-scoped policy. Eac
 
 - An accepted job has an owner, status, planned work, assigned staff and customer link.
 - Manager assigns or reassigns staff; changes are visible to affected users and retained in history.
-- Employees submit time entries for assigned jobs. Expense claims will record date, amount, currency, and reviewable evidence once their workflow and private evidence handling are defined.
+- Employees submit time entries for assigned jobs. Expense claims will record date, amount, currency, job, and reviewable evidence. Use [ADR-005](ADR-005-EXPENSE-EVIDENCE-HANDLING.md) for the evidence lifecycle and security baseline.
 - Job time entries are submitted by assigned staff with work date, hours, and an optional work description. Owner/admin/operations roles approve or reject with a reason; corrections preserve prior submission and review history. Hours are operational records and do not automatically create invoice charges or accounting entries.
-- Expense claims and receipt evidence remain unimplemented. Define private evidence collection, access, retention, and deletion before building uploads or using expense records.
-- Managers approve, reject with reason, or request correction. Submitted entries are not silently overwritten.
+- Expense claims and receipt evidence remain unimplemented. Do not enable uploads or real evidence until a private storage adapter, quarantine/scanning path, access controls, and customer/jurisdiction retention and deletion schedule are selected and verified under ADR-005.
+- Managers approve, reject, or request more information with a recorded reason. Missing-receipt exceptions require an authorized, audited waiver; submitted claim/evidence versions are not silently overwritten.
+- Keep evidence linked to the specific claim/expense line. A single-claim MVP is the default starting point; multi-line expense reports require workflow validation before they are added.
+- The initial file-policy recommendation is JPEG, PNG, and PDF with bounded per-file and per-claim limits. Unsupported active or compound formats are rejected. The exact defaults and any external processing must follow ADR-005.
 - Approved costs are available for job reporting and invoicing decisions but are not automatically treated as accounting expenses without an agreed accounting design.
 
 ### Invoice and payment
@@ -96,6 +98,7 @@ These are starting profiles, not substitutes for organization-scoped policy. Eac
 
 - Enforce least privilege, secure authentication/session handling, MFA for privileged accounts, encrypted transport, protected secrets and restricted audit access.
 - Apply tenant scoping across APIs, files, workers, cache keys, search, logs, exports and support tools.
+- Keep expense evidence private, encrypted in transit and at rest, scanned before access, access-audited, exported only through authorized flows, and purged under the approved retention policy; evidence content and OCR text do not belong in logs.
 - Minimize personal data; define retention, deletion, access/export and incident processes before production use.
 - Default to no sensitive HR/financial offline device cache. Offline drafts require explicit conflict and device-loss design.
 

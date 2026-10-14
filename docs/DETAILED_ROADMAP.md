@@ -2,7 +2,7 @@
 
 **Status:** Founder-directed build sequence; dates and staffing are not committed
 
-**Last updated:** 11 October 2026
+**Last updated:** 14 October 2026
 
 **Product ambition:** Global; Kenya remains a candidate market
 
@@ -32,7 +32,7 @@
 ## Current implementation status
 
 - **M0–M2:** Foundation and customer-to-job workflow are implemented in the existing releases.
-- **M3:** Job delivery, invoice issuance, correction history, and owner/finance invoice visibility are complete in v0.5.0. Issue #47 adds job time entry submission and manager approval. Expense claims remain outstanding until receipt evidence can be handled safely; time is not automatically converted to invoice charges or accounting expense.
+- **M3:** Job delivery, invoice issuance, correction history, and owner/finance invoice visibility are complete in v0.5.0. Issue #47 adds job time entry submission and manager approval. Issue #49 defines the provider-neutral evidence policy in [ADR-005](ADR-005-EXPENSE-EVIDENCE-HANDLING.md). Expense claims remain unimplemented until its storage, scanning, retention, support, and jurisdiction-specific decisions are resolved; time is not automatically converted to invoice charges or accounting expense.
 - **M4:** Manual receipts, same-customer/same-currency allocations, derived balances, and auditable reversals shipped in v0.6.0 through issue #15. Issue #19 shipped finance CSV exports for external review in v0.7.0. Issue #23 records the provisional first-provider sandbox direction and event/recovery contract in [ADR-002](ADR-002-PROVIDER-PAYMENTS.md); issue #25 records tenant credential lifecycle and secret-storage safeguards in [ADR-003](ADR-003-PAYMENT-CREDENTIAL-SECURITY.md). Issue #31 adds sandbox-only Daraja M-Pesa Express attempts, callbacks, and checkout-query verification, with receipt capture remaining in the existing finance workflow until the query response contract is confirmed against the simulator. No live payments are enabled. Confirm provider account-connection terms and the deployment/secret-manager choice before any live integration. Refunds, automated matching, and broader reconciliation remain future work.
 
 ## M0 — Repository and decision setup
@@ -63,7 +63,7 @@
 
 **Objective:** Connect accepted work to delivery and receivables.
 
-**Work:** job ownership/status, assignment and delivery notes; time entry submission and manager approval; expense claims after receipt evidence handling is defined; issue invoices through a defined source of truth; preserve controlled correction history; provide basic owner/finance views.
+**Work:** job ownership/status, assignment and delivery notes; time entry submission and manager approval; define private expense evidence handling in ADR-005 before implementing claims; issue invoices through a defined source of truth; preserve controlled correction history; provide basic owner/finance views.
 
 **Exit:** job and invoice links are explainable and exportable; invoices are not presented as full accounting without an agreed ledger and reporting model.
 
