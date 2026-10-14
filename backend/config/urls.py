@@ -20,6 +20,11 @@ from quotations.job_views import (
     job_time_entry_resubmit_view,
     job_time_entry_review_view,
 )
+from quotations.expense_views import (
+    expense_claim_detail_view,
+    expense_claim_transition_view,
+    expense_claims_view,
+)
 from invoicing.views import (
     finance_export_view,
     daraja_payment_attempt_create_view,
@@ -116,6 +121,21 @@ urlpatterns = [
         "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/time-entries/<int:entry_id>/resubmit/",
         job_time_entry_resubmit_view,
         name="job-time-entry-resubmit",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/expense-claims/",
+        expense_claims_view,
+        name="expense-claims",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/expense-claims/<int:claim_id>/",
+        expense_claim_detail_view,
+        name="expense-claim-detail",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/expense-claims/<int:claim_id>/transition/",
+        expense_claim_transition_view,
+        name="expense-claim-transition",
     ),
     path(
         "api/organizations/<uuid:organization_id>/invoices/",
