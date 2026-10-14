@@ -321,3 +321,76 @@ class ExpenseClaimHistory(models.Model):
 
     class Meta:
         ordering = ["created_at", "id"]
+
+
+class ExpenseClaimEvidence(models.Model):
+    class State(models.TextChoices):
+        QUARANTINED = "quarantined", "Quarantined"
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Rejected"
+        DELETED = "deleted", "Deleted"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="expense_evidence"
+    )
+    claim = models.ForeignKey(
+        ExpenseClaim, on_delete=models.CASCADE, related_name="evidence"
+    )
+    claim_version = models.PositiveIntegerField()
+    storage_key = models.CharField(max_length=32, unique=True)
+    state = models.CharField(max_length=12, choices=State.choices)
+    detected_media_type = models.CharField(max_length=32)
+    size_bytes = models.PositiveIntegerField()
+    sha256 = models.CharField(max_length=64)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="uploaded_expense_evidence",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes = [
+            models.Index(fields=["claim", "claim_version", "state"]),
+            models.Index(fields=["state", "created_at"]),
+        ]
+
+
+class ExpenseEvidenceAuditEvent(models.Model):
+    class Action(models.TextChoices):
+        QUARANTINE = "quarantine", "Quarantined"
+        SCAN_CLEAN = "scan_clean", "Scan clean"
+        SCAN_REJECTED = "scan_rejected", "Scan rejected"
+        SCAN_ERROR = "scan_error", "Scan error"
+        DOWNLOAD = "download", "Downloaded"
+        DELETE = "delete", "Deleted"
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="expense_evidence_audit"
+    )
+    claim = models.ForeignKey(
+        ExpenseClaim, on_delete=models.CASCADE, related_name="evidence_audit"
+    )
+    evidence = models.ForeignKey(
+        ExpenseClaimEvidence,
+        on_delete=models.SET_NULL,
+        related_name="audit_events",
+        null=True,
+        blank=True,
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    action = models.CharField(max_length=16, choices=Action.choices)
+    outcome = models.CharField(max_length=16)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]

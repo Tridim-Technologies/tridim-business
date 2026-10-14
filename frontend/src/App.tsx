@@ -27,8 +27,14 @@ type ExpenseClaim = {
   status: 'draft' | 'submitted' | 'returned' | 'approved' | 'rejected' | 'withdrawn'
   approved_at: string | null
   claimant?: string; merchant?: string; purpose?: string; missing_receipt_explanation?: string
-  receipt_state?: 'missing' | 'waived'; version?: number; revision?: number
+  receipt_state?: 'missing' | 'waived' | 'accepted'; version?: number; revision?: number
+  evidence_upload_enabled?: boolean
+  evidence?: ExpenseClaimEvidence[]
   history?: { action: string; previous_status: string; status: string; actor: string; version: number; amount: string; currency: string; purpose: string; reason: string; created_at: string }[]
+}
+type ExpenseClaimEvidence = {
+  id: string; claim_version: number; state: 'quarantined' | 'accepted' | 'rejected' | 'deleted'
+  detected_media_type: string; size_bytes: number; sha256: string; created_at: string; accepted_at: string | null
 }
 type Invoice = {
   id: string; invoice_number: string; job_id: number; customer_id: number; customer_name: string; source_quotation_id: string
@@ -79,7 +85,9 @@ function latestVoidedInvoice(invoices: Invoice[], jobId: number): Invoice | unde
 }
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, { ...init, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', ...init.headers } })
+  const isMultipart = init.body instanceof FormData
+  const headers = { ...(isMultipart ? {} : { 'Content-Type': 'application/json' }), ...init.headers }
+  const response = await fetch(path, { ...init, credentials: 'same-origin', headers })
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))
     const fieldError = Object.values(body).find((value) => Array.isArray(value)) as string[] | undefined
@@ -322,6 +330,42 @@ export default function App() {
     } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
   }
 
+  async function uploadExpenseEvidence(event: FormEvent<HTMLFormElement>, claim: ExpenseClaim) {
+    event.preventDefault(); setError(''); setSaving(true)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
+    try {
+      await api(`/api/organizations/${organization}/expense-claims/${claim.id}/evidence/`, {
+        method: 'POST', headers: csrfHeader(), body: form,
+      })
+      formElement.reset(); await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function downloadExpenseEvidence(claim: ExpenseClaim, evidence: ExpenseClaimEvidence) {
+    setError('')
+    try {
+      const response = await fetch(`/api/organizations/${organization}/expense-claims/${claim.id}/evidence/${evidence.id}/`, { credentials: 'same-origin' })
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}))
+        throw new Error(body.detail || `Download failed (${response.status})`)
+      }
+      const url = URL.createObjectURL(await response.blob())
+      const link = document.createElement('a')
+      const extension = evidence.detected_media_type === 'image/jpeg' ? '.jpg' : evidence.detected_media_type === 'image/png' ? '.png' : '.pdf'
+      link.href = url; link.download = `expense-evidence-${evidence.id.slice(0, 8)}${extension}`
+      document.body.append(link); link.click(); link.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (reason) { setError((reason as Error).message) }
+  }
+
+  async function deleteExpenseEvidence(claim: ExpenseClaim, evidence: ExpenseClaimEvidence) {
+    setError(''); setSaving(true)
+    try {
+      await api(`/api/organizations/${organization}/expense-claims/${claim.id}/evidence/${evidence.id}/`, { method: 'DELETE', headers: csrfHeader() })
+      await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
   async function transitionExpenseClaim(event: FormEvent<HTMLFormElement> | undefined, claim: ExpenseClaim, action: 'submit' | 'return' | 'resubmit' | 'waive' | 'approve' | 'reject' | 'withdraw') {
     event?.preventDefault(); setError(''); setSaving(true)
     const form = event ? new FormData(event.currentTarget) : null
@@ -509,7 +553,7 @@ export default function App() {
         </> : page === 'expenses' ? <>
           <div className="page-heading"><div><p className="eyebrow">DELIVERY COSTS</p><h1>Expense claims</h1><p className="muted">Track one expense per claim against a job. Approval does not reimburse anyone or post an accounting entry.</p></div><span className="count-pill">{expenseClaims.length} {expenseClaims.length === 1 ? 'claim' : 'claims'}</span></div>
           {error && <div className="alert inline-alert">{error}</div>}
-          <p className="expense-notice">Internal synthetic-data workflow. Do not enter real expenses or receipt details. File uploads are not available.</p>
+          <p className="expense-notice">Internal synthetic-data workflow only. Do not enter real expenses or upload real receipts. Evidence uploads are disabled by default and available only in local development with private storage and malware scanning configured.</p>
           {availableExpenseJobs.length > 0 && <section className="panel add-panel expense-create"><div className="panel-heading"><div><h2>New expense draft</h2><p>Only assigned members can create a claim. Explain a missing receipt before submitting.</p></div></div>
             <form className="expense-form" onSubmit={createExpenseClaim}>
               <label>Job<select name="job_id" required defaultValue=""><option value="" disabled>Select assigned job</option>{availableExpenseJobs.map((job) => <option key={job.id} value={job.id}>Job #{job.id} · {job.customer_name}</option>)}</select></label>
@@ -531,7 +575,19 @@ export default function App() {
               return <article className="expense-card" key={claim.id}>
                 <div className="invoice-top"><div><strong>{claim.currency} {claim.amount} · {claim.category}</strong><span className="quote-id">Claim #{claim.id} · Job #{claim.job_id} · {claim.expense_date}{claim.claimant ? ` · ${claim.claimant}` : ''}</span></div><span className={`quote-status ${claim.status}`}>{claim.status}</span></div>
                 {claim.purpose && <p>{claim.purpose}{claim.merchant ? ` · ${claim.merchant}` : ''}</p>}
-                {claim.receipt_state && <p>Receipt: {claim.receipt_state === 'waived' ? 'missing, waiver recorded' : 'missing'}{claim.missing_receipt_explanation ? ` · ${claim.missing_receipt_explanation}` : ''}</p>}
+                {claim.receipt_state && <p>Receipt: {claim.receipt_state === 'waived' ? 'missing, waiver recorded' : claim.receipt_state === 'accepted' ? 'evidence accepted for this version' : 'missing'}{claim.missing_receipt_explanation ? ` · ${claim.missing_receipt_explanation}` : ''}</p>}
+                {claim.evidence && claim.evidence.length > 0 && <div className="expense-evidence-list" aria-label={`Evidence for claim ${claim.id}`}>
+                  {claim.evidence.map((item) => <div className="expense-evidence-row" key={item.id}>
+                    <span>Receipt v{item.claim_version} · {(item.size_bytes / 1024).toFixed(0)} KB · {item.state}</span>
+                    {item.state === 'accepted' && <button className="quiet-action" type="button" onClick={() => downloadExpenseEvidence(claim, item)}>Download</button>}
+                    {isOwn && canEdit && item.state === 'accepted' && item.claim_version === (claim.status === 'returned' ? (claim.version || 1) + 1 : claim.version) && <button className="quiet-action" type="button" disabled={saving} onClick={() => deleteExpenseEvidence(claim, item)}>Remove</button>}
+                  </div>)}
+                </div>}
+                {isOwn && canEdit && claim.evidence_upload_enabled && <form className="expense-evidence-upload" onSubmit={(event) => uploadExpenseEvidence(event, claim)}>
+                  <label>Attach receipt (JPEG, PNG, or PDF)<input name="file" type="file" accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf" required /></label>
+                  <input type="hidden" name="revision" value={claim.revision} />
+                  <button className="quiet-action" disabled={saving}>Upload and scan</button>
+                </form>}
                 {canEdit && <details className="expense-edit"><summary>Edit claim</summary><form className="expense-form" onSubmit={(event) => editExpenseClaim(event, claim)}>
                   <label>Expense date<input type="date" name="expense_date" defaultValue={claim.expense_date} max={dateInputValue(new Date())} required /></label>
                   <label>Amount<input type="number" name="amount" min="0.00001" step="0.00001" defaultValue={claim.amount} required /></label>
@@ -542,13 +598,13 @@ export default function App() {
                   <label className="expense-wide">Why is the receipt missing?<input name="missing_receipt_explanation" defaultValue={claim.missing_receipt_explanation || ''} maxLength={500} /></label>
                   <button className="quiet-action" disabled={saving}>Save changes</button>
                 </form></details>}
-                {isOwn && claim.status === 'draft' && <div className="expense-actions"><button className="quiet-action" disabled={saving || !claim.missing_receipt_explanation} onClick={() => transitionExpenseClaim(undefined, claim, 'submit')}>Submit for review</button><button className="quiet-action" disabled={saving} onClick={() => transitionExpenseClaim(undefined, claim, 'withdraw')}>Withdraw</button></div>}
-                {isOwn && claim.status === 'returned' && <div className="expense-actions"><button className="quiet-action" disabled={saving || !claim.missing_receipt_explanation} onClick={() => transitionExpenseClaim(undefined, claim, 'resubmit')}>Resubmit corrected version</button><button className="quiet-action" disabled={saving} onClick={() => transitionExpenseClaim(undefined, claim, 'withdraw')}>Withdraw</button></div>}
+                {isOwn && claim.status === 'draft' && <div className="expense-actions"><button className="quiet-action" disabled={saving || (claim.receipt_state !== 'accepted' && !claim.missing_receipt_explanation)} onClick={() => transitionExpenseClaim(undefined, claim, 'submit')}>Submit for review</button><button className="quiet-action" disabled={saving} onClick={() => transitionExpenseClaim(undefined, claim, 'withdraw')}>Withdraw</button></div>}
+                {isOwn && claim.status === 'returned' && <div className="expense-actions"><button className="quiet-action" disabled={saving || (claim.receipt_state !== 'accepted' && !claim.missing_receipt_explanation)} onClick={() => transitionExpenseClaim(undefined, claim, 'resubmit')}>Resubmit corrected version</button><button className="quiet-action" disabled={saving} onClick={() => transitionExpenseClaim(undefined, claim, 'withdraw')}>Withdraw</button></div>}
                 {isOwn && claim.status === 'submitted' && <div className="expense-actions"><button className="quiet-action" disabled={saving} onClick={() => transitionExpenseClaim(undefined, claim, 'withdraw')}>Withdraw</button></div>}
                 {canReview && claim.status === 'submitted' && <div className="expense-actions">
                   <form onSubmit={(event) => transitionExpenseClaim(event, claim, 'return')}><input name="reason" maxLength={500} placeholder="Correction reason" aria-label={`Reason to return claim ${claim.id}`} required /><button className="quiet-action" disabled={saving}>Return</button></form>
-                  {claim.receipt_state !== 'waived' && <form onSubmit={(event) => transitionExpenseClaim(event, claim, 'waive')}><input name="reason" maxLength={500} placeholder="Waiver reason" aria-label={`Waiver reason for claim ${claim.id}`} required /><button className="quiet-action" disabled={saving}>Waive missing receipt</button></form>}
-                  {claim.receipt_state === 'waived' && <button className="quiet-action" disabled={saving} onClick={() => transitionExpenseClaim(undefined, claim, 'approve')}>Approve</button>}
+                  {claim.receipt_state === 'missing' && <form onSubmit={(event) => transitionExpenseClaim(event, claim, 'waive')}><input name="reason" maxLength={500} placeholder="Waiver reason" aria-label={`Waiver reason for claim ${claim.id}`} required /><button className="quiet-action" disabled={saving}>Waive missing receipt</button></form>}
+                  {claim.receipt_state !== 'missing' && <button className="quiet-action" disabled={saving} onClick={() => transitionExpenseClaim(undefined, claim, 'approve')}>Approve</button>}
                   <form onSubmit={(event) => transitionExpenseClaim(event, claim, 'reject')}><input name="reason" maxLength={500} placeholder="Rejection reason" aria-label={`Reason to reject claim ${claim.id}`} required /><button className="quiet-action" disabled={saving}>Reject</button></form>
                 </div>}
                 {claim.history && claim.history.length > 0 && <details className="expense-history"><summary>Claim history · version {claim.version}</summary>{claim.history.map((item, index) => <div key={`${claim.id}-${index}`}>{item.action} · v{item.version} · {item.actor} · {new Date(item.created_at).toLocaleString()} · {item.currency} {item.amount}{item.reason ? ` · ${item.reason}` : ''}</div>)}</details>}

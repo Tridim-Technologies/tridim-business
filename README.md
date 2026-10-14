@@ -46,6 +46,8 @@ npm run dev
 
 Open the Vite URL shown in the terminal. Sign in with the Django superuser only after an organization and membership have been created in Django Admin (`/admin/`). Set `DJANGO_SECRET_KEY`, `DATABASE_URL`, and `DJANGO_DEBUG=0` for non-local environments. Never use local development settings for production.
 
+The expense-evidence upload path is disabled by default. For local synthetic-file development only, set `EXPENSE_EVIDENCE_ENABLED=1` while keeping `DJANGO_DEBUG=1` and `DJANGO_ALLOWED_HOSTS` limited to `localhost,127.0.0.1`; configure `EXPENSE_EVIDENCE_CLAMD_SOCKET` to a local ClamAV Unix socket. Uploads fail closed if the scanner is unavailable. The default private file directory is `.private-evidence/`, which is ignored by Git and is not a production storage adapter. Never use this path with real expense data. See [`docs/EXPENSE_CLAIM_ALPHA.md`](docs/EXPENSE_CLAIM_ALPHA.md) for limits, roles, and cleanup.
+
 ## Documentation
 
 Product docs live under `docs/`. Security, privacy, tenant separation, auditability and data portability are core requirements.

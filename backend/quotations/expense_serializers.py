@@ -1,9 +1,10 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import ExpenseClaim, ExpenseClaimHistory
+from .models import ExpenseClaim, ExpenseClaimEvidence, ExpenseClaimHistory
 
 
 class StrictSerializer(serializers.Serializer):
@@ -100,6 +101,8 @@ class ExpenseClaimSerializer(serializers.ModelSerializer):
     claimant = serializers.CharField(source="claimant.get_username", read_only=True)
     history = ExpenseClaimHistorySerializer(many=True, read_only=True)
     receipt_state = serializers.SerializerMethodField()
+    evidence_upload_enabled = serializers.SerializerMethodField()
+    evidence = serializers.SerializerMethodField()
 
     class Meta:
         model = ExpenseClaim
@@ -115,6 +118,8 @@ class ExpenseClaimSerializer(serializers.ModelSerializer):
             "purpose",
             "missing_receipt_explanation",
             "receipt_state",
+            "evidence_upload_enabled",
+            "evidence",
             "status",
             "version",
             "revision",
@@ -126,7 +131,26 @@ class ExpenseClaimSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_receipt_state(self, obj):
-        return "waived" if obj.waived_version == obj.version else "missing"
+        version = (
+            obj.version + 1
+            if obj.status == ExpenseClaim.Status.RETURNED
+            else obj.version
+        )
+        if obj.waived_version == version:
+            return "waived"
+        if any(
+            evidence.state == ExpenseClaimEvidence.State.ACCEPTED
+            and evidence.claim_version == version
+            for evidence in obj.evidence.all()
+        ):
+            return "accepted"
+        return "missing"
+
+    def get_evidence_upload_enabled(self, obj):
+        return settings.EXPENSE_EVIDENCE_ENABLED
+
+    def get_evidence(self, obj):
+        return ExpenseClaimEvidenceSerializer(obj.evidence.all(), many=True).data
 
 
 class ExpenseClaimFinanceSerializer(serializers.ModelSerializer):
@@ -143,3 +167,14 @@ class ExpenseClaimFinanceSerializer(serializers.ModelSerializer):
             "approved_at",
         )
         read_only_fields = fields
+
+
+class ExpenseClaimEvidenceSerializer(serializers.Serializer):
+    id = serializers.UUIDField(read_only=True)
+    claim_version = serializers.IntegerField(read_only=True)
+    state = serializers.CharField(read_only=True)
+    detected_media_type = serializers.CharField(read_only=True)
+    size_bytes = serializers.IntegerField(read_only=True)
+    sha256 = serializers.CharField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    accepted_at = serializers.DateTimeField(read_only=True, allow_null=True)

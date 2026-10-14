@@ -126,6 +126,33 @@ DARAJA_SHORTCODE = os.environ.get("DARAJA_SHORTCODE", "")
 DARAJA_PASSKEY = os.environ.get("DARAJA_PASSKEY", "")
 DARAJA_CALLBACK_URL = os.environ.get("DARAJA_CALLBACK_URL", "")
 
+# Expense evidence is a gated synthetic-data feature. Never enable it in an
+# environment that accepts real evidence until its storage, scanner, retention,
+# backup, support, and incident controls have been reviewed.
+EXPENSE_EVIDENCE_ENABLED = (
+    DEBUG
+    and all(host in {"localhost", "127.0.0.1", "[::1]"} for host in ALLOWED_HOSTS)
+    and os.environ.get("EXPENSE_EVIDENCE_ENABLED", "0") == "1"
+)
+EXPENSE_EVIDENCE_STORAGE_ROOT = Path(
+    os.environ.get("EXPENSE_EVIDENCE_STORAGE_ROOT") or BASE_DIR / ".private-evidence"
+)
+EXPENSE_EVIDENCE_CLAMD_SOCKET = os.environ.get("EXPENSE_EVIDENCE_CLAMD_SOCKET", "")
+EXPENSE_EVIDENCE_MAX_FILE_BYTES = _positive_int_setting(
+    "EXPENSE_EVIDENCE_MAX_FILE_BYTES", 10 * 1024 * 1024
+)
+EXPENSE_EVIDENCE_MAX_FILES_PER_VERSION = _positive_int_setting(
+    "EXPENSE_EVIDENCE_MAX_FILES_PER_VERSION", 5
+)
+EXPENSE_EVIDENCE_MAX_TOTAL_BYTES = _positive_int_setting(
+    "EXPENSE_EVIDENCE_MAX_TOTAL_BYTES", 25 * 1024 * 1024
+)
+EXPENSE_EVIDENCE_QUARANTINE_SECONDS = _positive_int_setting(
+    "EXPENSE_EVIDENCE_QUARANTINE_SECONDS", 3600
+)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 26 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024
+
 LOGIN_MAX_REQUEST_BYTES = _positive_int_setting("LOGIN_MAX_REQUEST_BYTES", 4096)
 LOGIN_ATTEMPTS_PER_IDENTITY_IP = _positive_int_setting(
     "LOGIN_ATTEMPTS_PER_IDENTITY_IP", 10

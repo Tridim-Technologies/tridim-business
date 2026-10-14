@@ -60,7 +60,7 @@ An organization must have someone other than the claimant with review permission
 
 The public MVP starts with **a receipt required for each submitted claim**, with a narrow missing-receipt exception. The claimant must either attach an accepted receipt for the current version or state why it is missing. A reviewer can waive it only through the explicit action above. The interface should show missing evidence before submission and make the reviewer decision clear. Category- or amount-based rules, a reusable receipt inbox, OCR, and automated extraction are later candidates.
 
-Receipt acceptance is a server-side result of the private upload, quarantine, validation, and scanning flow in ADR-005. The claim workflow may be built with synthetic records before that flow exists, but ordinary receipt-based approval must stay unavailable until it does. A synthetic-only build can exercise the explicit missing-receipt/waiver path; it must not offer a fake `receipt_present` switch or treat every claim as waived. Real files and real claims remain blocked until storage, scanning, access auditing, retention, and deletion controls are verified.
+Receipt acceptance is a server-side result of the private upload, quarantine, validation, and scanning flow in ADR-005. A development-only synthetic path now exercises that flow behind `DEBUG=1` and `EXPENSE_EVIDENCE_ENABLED=1`, with private local storage and a configured ClamAV Unix socket. A clean scan is required before evidence can be used; scanner errors fail closed. The claim workflow continues to support the explicit missing-receipt/waiver path and has no client-controlled `receipt_present` switch. Real files and real claims remain blocked until production storage and isolated parsing/scanning, access auditing, customer-specific retention and deletion, backups, support, monitoring, and incident controls are selected and verified.
 
 ## Consistency and audit rules
 
@@ -83,4 +83,4 @@ Receipt acceptance is a server-side result of the private upload, quarantine, va
 
 ## Next implementation boundary
 
-Build claim records, versioned status history, tenant and role checks, and a small UI with synthetic data. The first increment can use the explicit missing-receipt and reviewer-waiver path. Receipt upload/storage/scanning is a separate follow-up that must pass ADR-005. Do not introduce real business data or deployment decisions as part of the claim-workflow increment.
+The synthetic alpha includes claim records, versioned status history, tenant and role checks, a small UI, and a gated local receipt upload path. Do not introduce real business data or deployment decisions as part of this software increment; use the missing-receipt/waiver path when the development scanner is not configured. Real-data use remains gated by ADR-005.
