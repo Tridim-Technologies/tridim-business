@@ -245,3 +245,79 @@ class JobTimeEntryHistory(models.Model):
 
     class Meta:
         ordering = ["created_at", "id"]
+
+
+class ExpenseClaim(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SUBMITTED = "submitted", "Submitted"
+        RETURNED = "returned", "Returned"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        WITHDRAWN = "withdrawn", "Withdrawn"
+
+    class Category(models.TextChoices):
+        TRAVEL = "travel", "Travel"
+        MEALS = "meals", "Meals"
+        MATERIALS = "materials", "Materials"
+        OTHER = "other", "Other"
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="expense_claims"
+    )
+    job = models.ForeignKey(
+        Job, on_delete=models.PROTECT, related_name="expense_claims"
+    )
+    claimant = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="expense_claims",
+    )
+    expense_date = models.DateField()
+    amount = models.DecimalField(max_digits=18, decimal_places=5)
+    currency = models.CharField(max_length=3)
+    category = models.CharField(max_length=12, choices=Category.choices)
+    merchant = models.CharField(max_length=160, blank=True)
+    purpose = models.CharField(max_length=1000)
+    missing_receipt_explanation = models.CharField(max_length=500, blank=True)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.DRAFT
+    )
+    version = models.PositiveIntegerField(default=1)
+    revision = models.PositiveIntegerField(default=1)
+    waived_version = models.PositiveIntegerField(null=True, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0), name="expense_claim_amount_positive"
+            )
+        ]
+
+
+class ExpenseClaimHistory(models.Model):
+    claim = models.ForeignKey(
+        ExpenseClaim, on_delete=models.CASCADE, related_name="history"
+    )
+    action = models.CharField(max_length=16)
+    previous_status = models.CharField(max_length=12, blank=True)
+    status = models.CharField(max_length=12, choices=ExpenseClaim.Status.choices)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    version = models.PositiveIntegerField()
+    revision = models.PositiveIntegerField()
+    expense_date = models.DateField()
+    amount = models.DecimalField(max_digits=18, decimal_places=5)
+    currency = models.CharField(max_length=3)
+    category = models.CharField(max_length=12, choices=ExpenseClaim.Category.choices)
+    merchant = models.CharField(max_length=160, blank=True)
+    purpose = models.CharField(max_length=1000)
+    missing_receipt_explanation = models.CharField(max_length=500, blank=True)
+    reason = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]

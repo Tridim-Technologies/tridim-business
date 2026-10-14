@@ -8,7 +8,7 @@
 
 ## Context
 
-The MVP includes employee expense claims, but currently has no expense-claim or file-upload implementation. Receipts can contain names, addresses, payment details, travel patterns, and unrelated personal information. A receipt must remain attached to the right organization and claim, available only to authorized people, and governed by a lifecycle that works across storage, backups, exports, and deletion.
+The MVP includes a synthetic-data expense claim workflow, but no file-upload implementation or real-data use. Receipts can contain names, addresses, payment details, travel patterns, and unrelated personal information. A receipt must remain attached to the right organization and claim, available only to authorized people, and governed by a lifecycle that works across storage, backups, exports, and deletion.
 
 Established business software illustrates useful patterns: mobile capture and upload, reusable receipt inboxes, evidence at expense-line or report level, policy-based receipt requirements, and a review path for missing evidence. Tridim Business should make the common path simple, keep evidence portable, make privacy controls understandable, and avoid adding automation or configuration that customers do not need. Comparative product claims require evaluation.
 

@@ -21,6 +21,14 @@ type TimeEntry = {
   status: 'submitted' | 'approved' | 'rejected'; created_at: string; updated_at: string
   history: { previous_status: string; status: string; actor: string; work_date: string; hours: string; description: string; reason: string; created_at: string }[]
 }
+type ExpenseClaim = {
+  id: number; job_id: number; expense_date: string; amount: string; currency: string; category: string
+  status: 'draft' | 'submitted' | 'returned' | 'approved' | 'rejected' | 'withdrawn'
+  approved_at: string | null
+  claimant?: string; merchant?: string; purpose?: string; missing_receipt_explanation?: string
+  receipt_state?: 'missing' | 'waived'; version?: number; revision?: number
+  history?: { action: string; previous_status: string; status: string; actor: string; version: number; amount: string; currency: string; purpose: string; reason: string; created_at: string }[]
+}
 type Invoice = {
   id: string; invoice_number: string; job_id: number; customer_id: number; customer_name: string; source_quotation_id: string
   status: 'issued' | 'void'; issue_date: string; due_date: string; currency: string; total: string
@@ -75,6 +83,7 @@ export default function App() {
   const [quotations, setQuotations] = useState<Quote[]>([])
   const [jobs, setJobs] = useState<Job[]>([])
   const [timeEntries, setTimeEntries] = useState<Record<number, TimeEntry[]>>({})
+  const [expenseClaims, setExpenseClaims] = useState<ExpenseClaim[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
   const [financeCustomers, setFinanceCustomers] = useState<Customer[]>([])
@@ -84,7 +93,7 @@ export default function App() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null)
   const [quoteLines, setQuoteLines] = useState([{ description: '', quantity: '1', unit_price: '' }])
-  const [page, setPage] = useState<'customers' | 'quotations' | 'jobs' | 'invoices'>('customers')
+  const [page, setPage] = useState<'customers' | 'quotations' | 'jobs' | 'expenses' | 'invoices'>('customers')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -102,13 +111,14 @@ export default function App() {
 
   const refreshData = useCallback(async () => {
     if (!organization) return
-    const [customerData, quoteData, jobData, invoiceData, paymentData, financeCustomerData] = await Promise.all([
+    const [customerData, quoteData, jobData, invoiceData, paymentData, financeCustomerData, expenseData] = await Promise.all([
       api<{ results: Customer[] }>(`/api/organizations/${organization}/customers/?status=${customerStatus}&search=${encodeURIComponent(customerSearch)}`),
       api<{ results: Quote[] }>(`/api/organizations/${organization}/quotations/`),
       api<{ results: Job[] }>(`/api/organizations/${organization}/jobs/`),
       canViewInvoices ? api<{ results: Invoice[] }>(`/api/organizations/${organization}/invoices/`) : Promise.resolve({ results: [] as Invoice[] }),
       canViewInvoices ? api<{ results: Payment[] }>(`/api/organizations/${organization}/payments/`) : Promise.resolve({ results: [] as Payment[] }),
       canViewInvoices ? api<{ results: Customer[] }>(`/api/organizations/${organization}/customers/?status=all`) : Promise.resolve({ results: [] as Customer[] }),
+      api<{ results: ExpenseClaim[] }>(`/api/organizations/${organization}/expense-claims/`),
     ])
     const timeEntryResults = canViewTimeEntries
       ? await Promise.all(jobData.results.map(async (job) => {
@@ -116,12 +126,12 @@ export default function App() {
         return [job.id, result.results] as const
       }))
       : []
-    setCustomers(customerData.results); setQuotations(quoteData.results); setJobs(jobData.results); setTimeEntries(Object.fromEntries(timeEntryResults)); setInvoices(invoiceData.results); setPayments(paymentData.results); setFinanceCustomers(financeCustomerData.results); setError('')
+    setCustomers(customerData.results); setQuotations(quoteData.results); setJobs(jobData.results); setTimeEntries(Object.fromEntries(timeEntryResults)); setExpenseClaims(expenseData.results); setInvoices(invoiceData.results); setPayments(paymentData.results); setFinanceCustomers(financeCustomerData.results); setError('')
   }, [organization, customerStatus, customerSearch, canViewInvoices, canViewTimeEntries])
 
   useEffect(() => { refreshSession().catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false)) }, [])
   useEffect(() => {
-    if (!session?.authenticated || !organization) { setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setInvoices([]); return }
+    if (!session?.authenticated || !organization) { setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setExpenseClaims([]); setInvoices([]); return }
     refreshData().catch((reason: Error) => setError(reason.message))
   }, [session, organization, refreshData])
 
@@ -249,6 +259,54 @@ export default function App() {
     } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
   }
 
+  function expenseFields(form: FormData) {
+    return {
+      expense_date: String(form.get('expense_date')),
+      amount: String(form.get('amount')),
+      currency: String(form.get('currency')).toUpperCase(),
+      category: String(form.get('category')),
+      merchant: String(form.get('merchant') || ''),
+      purpose: String(form.get('purpose')),
+      missing_receipt_explanation: String(form.get('missing_receipt_explanation') || ''),
+    }
+  }
+
+  async function createExpenseClaim(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setError(''); setSaving(true)
+    const formElement = event.currentTarget; const form = new FormData(formElement)
+    try {
+      await api(`/api/organizations/${organization}/expense-claims/`, {
+        method: 'POST', headers: csrfHeader(),
+        body: JSON.stringify({ ...expenseFields(form), job_id: Number(form.get('job_id')) }),
+      })
+      formElement.reset(); await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function editExpenseClaim(event: FormEvent<HTMLFormElement>, claim: ExpenseClaim) {
+    event.preventDefault(); setError(''); setSaving(true)
+    const form = new FormData(event.currentTarget)
+    try {
+      await api(`/api/organizations/${organization}/expense-claims/${claim.id}/`, {
+        method: 'PATCH', headers: csrfHeader(),
+        body: JSON.stringify({ ...expenseFields(form), revision: claim.revision }),
+      })
+      await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function transitionExpenseClaim(event: FormEvent<HTMLFormElement> | undefined, claim: ExpenseClaim, action: 'submit' | 'return' | 'resubmit' | 'waive' | 'approve' | 'reject' | 'withdraw') {
+    event?.preventDefault(); setError(''); setSaving(true)
+    const form = event ? new FormData(event.currentTarget) : null
+    try {
+      await api(`/api/organizations/${organization}/expense-claims/${claim.id}/transition/`, {
+        method: 'POST', headers: csrfHeader(),
+        body: JSON.stringify({ action, revision: claim.revision, reason: String(form?.get('reason') || '') }),
+      })
+      await refreshData()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
   async function issueInvoice(event: FormEvent<HTMLFormElement>, job: Job) {
     event.preventDefault(); setError(''); setSaving(true)
     const formElement = event.currentTarget; const form = new FormData(formElement)
@@ -342,7 +400,7 @@ export default function App() {
 
   async function signOut() {
     await api('/api/session/', { method: 'DELETE', headers: csrfHeader() })
-    setSession({ authenticated: false }); setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setInvoices([]); setPayments([]); setFinanceCustomers([])
+    setSession({ authenticated: false }); setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setExpenseClaims([]); setInvoices([]); setPayments([]); setFinanceCustomers([])
   }
 
   if (loading) return <main className="loading">Loading your workspace…</main>
@@ -358,8 +416,9 @@ export default function App() {
   const canManageCustomers = ['owner', 'admin', 'sales', 'operations'].includes(activeOrg?.role || '')
   const canManageJobs = ['owner', 'admin', 'operations'].includes(activeOrg?.role || '')
   const canWriteJobNotes = canManageJobs || activeOrg?.role === 'employee'
-  const label = page === 'jobs' ? 'Jobs' : page === 'quotations' ? 'Quotations' : page === 'invoices' ? 'Invoices' : 'Customers'
+  const label = page === 'jobs' ? 'Jobs' : page === 'expenses' ? 'Expenses' : page === 'quotations' ? 'Quotations' : page === 'invoices' ? 'Invoices' : 'Customers'
   const visibleQuotes = quotations
+  const availableExpenseJobs = jobs.filter((job) => job.status !== 'cancelled' && job.assignments.some((assignment) => assignment.user === session.user?.username && !assignment.unassigned_at))
   return <div className="app-shell">
     <aside className="sidebar"><div className="brand"><div className="brand-mark">T</div><div><strong>Tridim</strong><small>BUSINESS</small></div></div>
       <div className="workspace-label">WORKSPACE</div><div className="workspace">{activeOrg?.name || 'No organization'}</div>
@@ -367,11 +426,12 @@ export default function App() {
         <button className={`nav-item ${page === 'customers' ? 'active' : ''}`} onClick={() => setPage('customers')}><span className="nav-icon">◫</span> Customers</button>
         <button className={`nav-item ${page === 'quotations' ? 'active' : ''}`} onClick={() => setPage('quotations')}><span className="nav-icon">↗</span> Quotations</button>
         <button className={`nav-item ${page === 'jobs' ? 'active' : ''}`} onClick={() => setPage('jobs')}><span className="nav-icon">▦</span> Jobs</button>
+        <button className={`nav-item ${page === 'expenses' ? 'active' : ''}`} onClick={() => setPage('expenses')}><span className="nav-icon">◇</span> Expenses</button>
         {canViewInvoices && <button className={`nav-item ${page === 'invoices' ? 'active' : ''}`} onClick={() => setPage('invoices')}><span className="nav-icon">▤</span> Invoices</button>}
       </nav>
       <div className="sidebar-bottom"><span className="avatar">{session.user?.username.slice(0, 1).toUpperCase()}</span><div className="user-label"><strong>{session.user?.username}</strong><small>{activeOrg?.role || 'Member'}</small></div><button className="icon-button" onClick={signOut} aria-label="Sign out">↗</button></div>
     </aside>
-    <main className="main-area"><header className="topbar"><div><span className="breadcrumb">Workspace</span><span className="slash">/</span> {label}</div><div className="top-actions"><select aria-label="Organization" value={organization} onChange={(event) => { setOrganization(event.target.value); setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setInvoices([]) }}>{session.organizations?.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}</select><span className="avatar small">{session.user?.username.slice(0, 1).toUpperCase()}</span></div></header>
+    <main className="main-area"><header className="topbar"><div><span className="breadcrumb">Workspace</span><span className="slash">/</span> {label}</div><div className="top-actions"><select aria-label="Organization" value={organization} onChange={(event) => { setOrganization(event.target.value); setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setExpenseClaims([]); setInvoices([]) }}>{session.organizations?.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}</select><span className="avatar small">{session.user?.username.slice(0, 1).toUpperCase()}</span></div></header>
       <div className="content">
         {page === 'customers' ? <>
           <div className="page-heading"><div><p className="eyebrow">RELATIONSHIPS</p><h1>Customers</h1><p className="muted">Keep the people and businesses you work with in one place.</p></div><span className="count-pill">{customers.length} {customers.length === 1 ? 'customer' : 'customers'}</span></div>
@@ -383,6 +443,55 @@ export default function App() {
           {canManageCustomers && <section className="panel add-panel"><div className="panel-heading"><div><h2>Add a customer</h2><p>Create a record for this workspace.</p></div></div><form className="stack-form" onSubmit={addCustomer}><label>Business or customer name <span className="required">*</span><input name="name" placeholder="e.g. Northstar Services" required /></label><label>Contact person<input name="contact_name" placeholder="Full name" /></label><label>Email address<input type="email" name="email" placeholder="name@business.com" /></label><label>Phone number<input name="phone" placeholder="+1 555 000 0000" /></label><button className="primary" disabled={saving || !organization}>{saving ? 'Saving…' : 'Add customer'} <span>＋</span></button></form></section>}</div>
           {editingCustomer && <section className="panel add-panel customer-edit-panel"><div className="panel-heading"><div><h2>Edit {editingCustomer.name}</h2><p>Update contact details for this organization.</p></div></div><form key={editingCustomer.id} className="stack-form" onSubmit={updateCustomer}><label>Business or customer name <span className="required">*</span><input name="name" defaultValue={editingCustomer.name} required /></label><label>Contact person<input name="contact_name" defaultValue={editingCustomer.contact_name} /></label><label>Email address<input type="email" name="email" defaultValue={editingCustomer.email} /></label><label>Phone number<input name="phone" defaultValue={editingCustomer.phone} /></label><button className="primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'} <span>✓</span></button><button type="button" className="quiet-action" onClick={() => setEditingCustomer(null)}>Cancel</button></form></section>}
           <p className="page-note"><span>◈</span> Customer records are visible only to members of this organization.</p>
+        </> : page === 'expenses' ? <>
+          <div className="page-heading"><div><p className="eyebrow">DELIVERY COSTS</p><h1>Expense claims</h1><p className="muted">Track one expense per claim against a job. Approval does not reimburse anyone or post an accounting entry.</p></div><span className="count-pill">{expenseClaims.length} {expenseClaims.length === 1 ? 'claim' : 'claims'}</span></div>
+          {error && <div className="alert inline-alert">{error}</div>}
+          <p className="expense-notice">Internal synthetic-data workflow. Do not enter real expenses or receipt details. File uploads are not available.</p>
+          {availableExpenseJobs.length > 0 && <section className="panel add-panel expense-create"><div className="panel-heading"><div><h2>New expense draft</h2><p>Only assigned members can create a claim. Explain a missing receipt before submitting.</p></div></div>
+            <form className="expense-form" onSubmit={createExpenseClaim}>
+              <label>Job<select name="job_id" required defaultValue=""><option value="" disabled>Select assigned job</option>{availableExpenseJobs.map((job) => <option key={job.id} value={job.id}>Job #{job.id} · {job.customer_name}</option>)}</select></label>
+              <label>Expense date<input type="date" name="expense_date" defaultValue={dateInputValue(new Date())} max={dateInputValue(new Date())} required /></label>
+              <label>Amount<input type="number" name="amount" min="0.00001" step="0.00001" required /></label>
+              <label>Currency<input name="currency" defaultValue="KES" minLength={3} maxLength={3} pattern="[A-Z]{3}" required /></label>
+              <label>Category<select name="category" required defaultValue="travel"><option value="travel">Travel</option><option value="meals">Meals</option><option value="materials">Materials</option><option value="other">Other</option></select></label>
+              <label>Merchant (optional)<input name="merchant" maxLength={160} /></label>
+              <label className="expense-wide">Business purpose<input name="purpose" maxLength={1000} required /></label>
+              <label className="expense-wide">Why is the receipt missing? (required before submission)<input name="missing_receipt_explanation" maxLength={500} /></label>
+              <button className="primary" disabled={saving}>Create draft <span>＋</span></button>
+            </form>
+          </section>}
+          <section className="panel expense-register"><div className="panel-heading"><div><h2>Claim register</h2><p>Claimants see their own claims. Reviewers see organization claims; finance sees approved metadata.</p></div></div>
+            {expenseClaims.length ? <div className="expense-list">{expenseClaims.map((claim) => {
+              const isOwn = claim.claimant === session.user?.username
+              const canReview = canManageJobs && !isOwn && claim.revision !== undefined
+              const canEdit = isOwn && (claim.status === 'draft' || claim.status === 'returned')
+              return <article className="expense-card" key={claim.id}>
+                <div className="invoice-top"><div><strong>{claim.currency} {claim.amount} · {claim.category}</strong><span className="quote-id">Claim #{claim.id} · Job #{claim.job_id} · {claim.expense_date}{claim.claimant ? ` · ${claim.claimant}` : ''}</span></div><span className={`quote-status ${claim.status}`}>{claim.status}</span></div>
+                {claim.purpose && <p>{claim.purpose}{claim.merchant ? ` · ${claim.merchant}` : ''}</p>}
+                {claim.receipt_state && <p>Receipt: {claim.receipt_state === 'waived' ? 'missing, waiver recorded' : 'missing'}{claim.missing_receipt_explanation ? ` · ${claim.missing_receipt_explanation}` : ''}</p>}
+                {canEdit && <details className="expense-edit"><summary>Edit claim</summary><form className="expense-form" onSubmit={(event) => editExpenseClaim(event, claim)}>
+                  <label>Expense date<input type="date" name="expense_date" defaultValue={claim.expense_date} max={dateInputValue(new Date())} required /></label>
+                  <label>Amount<input type="number" name="amount" min="0.00001" step="0.00001" defaultValue={claim.amount} required /></label>
+                  <label>Currency<input name="currency" defaultValue={claim.currency} minLength={3} maxLength={3} pattern="[A-Z]{3}" required /></label>
+                  <label>Category<select name="category" defaultValue={claim.category} required><option value="travel">Travel</option><option value="meals">Meals</option><option value="materials">Materials</option><option value="other">Other</option></select></label>
+                  <label>Merchant<input name="merchant" defaultValue={claim.merchant || ''} maxLength={160} /></label>
+                  <label className="expense-wide">Business purpose<input name="purpose" defaultValue={claim.purpose || ''} maxLength={1000} required /></label>
+                  <label className="expense-wide">Why is the receipt missing?<input name="missing_receipt_explanation" defaultValue={claim.missing_receipt_explanation || ''} maxLength={500} /></label>
+                  <button className="quiet-action" disabled={saving}>Save changes</button>
+                </form></details>}
+                {isOwn && claim.status === 'draft' && <div className="expense-actions"><button className="quiet-action" disabled={saving || !claim.missing_receipt_explanation} onClick={() => transitionExpenseClaim(undefined, claim, 'submit')}>Submit for review</button><button className="quiet-action" disabled={saving} onClick={() => transitionExpenseClaim(undefined, claim, 'withdraw')}>Withdraw</button></div>}
+                {isOwn && claim.status === 'returned' && <div className="expense-actions"><button className="quiet-action" disabled={saving || !claim.missing_receipt_explanation} onClick={() => transitionExpenseClaim(undefined, claim, 'resubmit')}>Resubmit corrected version</button><button className="quiet-action" disabled={saving} onClick={() => transitionExpenseClaim(undefined, claim, 'withdraw')}>Withdraw</button></div>}
+                {isOwn && claim.status === 'submitted' && <div className="expense-actions"><button className="quiet-action" disabled={saving} onClick={() => transitionExpenseClaim(undefined, claim, 'withdraw')}>Withdraw</button></div>}
+                {canReview && claim.status === 'submitted' && <div className="expense-actions">
+                  <form onSubmit={(event) => transitionExpenseClaim(event, claim, 'return')}><input name="reason" maxLength={500} placeholder="Correction reason" aria-label={`Reason to return claim ${claim.id}`} required /><button className="quiet-action" disabled={saving}>Return</button></form>
+                  {claim.receipt_state !== 'waived' && <form onSubmit={(event) => transitionExpenseClaim(event, claim, 'waive')}><input name="reason" maxLength={500} placeholder="Waiver reason" aria-label={`Waiver reason for claim ${claim.id}`} required /><button className="quiet-action" disabled={saving}>Waive missing receipt</button></form>}
+                  {claim.receipt_state === 'waived' && <button className="quiet-action" disabled={saving} onClick={() => transitionExpenseClaim(undefined, claim, 'approve')}>Approve</button>}
+                  <form onSubmit={(event) => transitionExpenseClaim(event, claim, 'reject')}><input name="reason" maxLength={500} placeholder="Rejection reason" aria-label={`Reason to reject claim ${claim.id}`} required /><button className="quiet-action" disabled={saving}>Reject</button></form>
+                </div>}
+                {claim.history && claim.history.length > 0 && <details className="expense-history"><summary>Claim history · version {claim.version}</summary>{claim.history.map((item, index) => <div key={`${claim.id}-${index}`}>{item.action} · v{item.version} · {item.actor} · {new Date(item.created_at).toLocaleString()} · {item.currency} {item.amount}{item.reason ? ` · ${item.reason}` : ''}</div>)}</details>}
+              </article>
+            })}</div> : <div className="empty-state"><div className="empty-icon">◇</div><strong>No expense claims yet</strong><p>Assigned members can create a draft for a job.</p></div>}
+          </section>
         </> : page === 'invoices' ? <>
           <div className="page-heading"><div><p className="eyebrow">FINANCE</p><h1>Invoices</h1><p className="muted">Internal invoice and manual receipt records for completed work. Tax is not calculated.</p></div><span className="count-pill">{invoices.length} {invoices.length === 1 ? 'invoice' : 'invoices'}</span></div>
           {error && <div className="alert inline-alert">{error}</div>}

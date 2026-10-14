@@ -4,7 +4,7 @@ Tridim Business is a global-ambition business operations platform from Tridim Te
 
 ## Project status
 
-This repository contains the internal alpha foundation and planning documents. Signed-in organization members can manage customers, prepare quotations, record quotation decisions, and create one linked job when a quotation is accepted. Finance members can issue invoices and record, allocate, and reverse manual receipts. A sandbox-only Daraja M-Pesa Express attempt and status flow is available for synthetic data; it does not create ledger receipts automatically or enable live payments. Tax and quotation totals are not calculated. The illustrative workflow prototype uses synthetic data, has no backend and saves nothing.
+This repository contains the internal alpha foundation and planning documents. Signed-in organization members can manage customers, prepare quotations, record quotation decisions, and create one linked job when a quotation is accepted. Assigned members can record synthetic expense claims for jobs; reviewers can return, waive missing evidence, approve, or reject them. Receipt uploads and real expense data are not supported. Finance members can issue invoices and record, allocate, and reverse manual receipts. A sandbox-only Daraja M-Pesa Express attempt and status flow is available for synthetic data; it does not create ledger receipts automatically or enable live payments. Tax and quotation totals are not calculated. The illustrative workflow prototype uses synthetic data, has no backend and saves nothing.
 
 ## Start here
 
@@ -15,6 +15,7 @@ This repository contains the internal alpha foundation and planning documents. S
 5. Read [`docs/DARAJA_SANDBOX.md`](docs/DARAJA_SANDBOX.md) before configuring the sandbox M-Pesa Express flow.
 6. Review [`docs/DATABASE_BACKUP_AND_RESTORE.md`](docs/DATABASE_BACKUP_AND_RESTORE.md) for the PostgreSQL recovery runbook and local synthetic rehearsal.
 7. Open [`prototype/job-to-cash/index.html`](prototype/job-to-cash/index.html) for the sample workflow concept.
+8. Read [`docs/EXPENSE_CLAIM_ALPHA.md`](docs/EXPENSE_CLAIM_ALPHA.md) for the synthetic expense claim API and UI.
 
 ## Scope
 

@@ -1,12 +1,12 @@
 # Expense claim MVP workflow
 
-**Status:** Design baseline for an internal build with synthetic records; no real expense data is authorized
+**Status:** Synthetic claim core implemented in issue #53; no real expense data is authorized
 
 **Date:** 14 October 2026
 
 **Scope:** Public core product, one expense per claim, linked to one job
 
-This document fixes the claim shape and review rules needed for the next implementation issue. [ADR-005](ADR-005-EXPENSE-EVIDENCE-HANDLING.md) governs receipt files and remains the gate for any actual upload or real-data use.
+This document fixes the claim shape and review rules used by the [synthetic alpha workflow](EXPENSE_CLAIM_ALPHA.md). [ADR-005](ADR-005-EXPENSE-EVIDENCE-HANDLING.md) governs receipt files and remains the gate for any actual upload or real-data use.
 
 ## Claim shape and validation
 
