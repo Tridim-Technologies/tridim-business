@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.12.1 (2026-10-14)
+
+### Bug Fixes
+
+- **payments**: Keep non-final Daraja queries pending
+  ([#58](https://github.com/Tridim-Technologies/tridim-business/pull/58),
+  [`6b82d46`](https://github.com/Tridim-Technologies/tridim-business/commit/6b82d46bbe7ce057b8dda617c624e91ad4849402))
+
+
 ## v0.12.0 (2026-10-14)
 
 ### Features
