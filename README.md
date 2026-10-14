@@ -4,7 +4,7 @@ Tridim Business is a global-ambition business operations platform from Tridim Te
 
 ## Project status
 
-This repository contains the internal alpha foundation and planning documents. Signed-in organization members can manage customers, prepare quotations, record quotation decisions, and create one linked job when a quotation is accepted. Assigned members can record synthetic expense claims for jobs; reviewers can return, waive missing evidence, approve, or reject them. Receipt uploads and real expense data are not supported. Finance members can issue invoices and record, allocate, and reverse manual receipts. A sandbox-only Daraja M-Pesa Express attempt and status flow is available for synthetic data; it does not create ledger receipts automatically or enable live payments. Tax and quotation totals are not calculated. The illustrative workflow prototype uses synthetic data, has no backend and saves nothing.
+This repository contains the internal alpha foundation and planning documents. Signed-in organization members can manage customers, prepare quotations, record quotation decisions, and create one linked job when a quotation is accepted. Assigned members can record synthetic expense claims for jobs; reviewers can return, waive missing evidence, approve, or reject them. Receipt uploads and real expense data are not supported. Finance members can issue invoices and record, allocate, and reverse manual receipts. Finance users can also initiate and track sandbox-only Daraja M-Pesa Express attempts from the invoice UI; attempts do not create ledger receipts automatically or enable live payments. Tax and quotation totals are not calculated. The illustrative workflow prototype uses synthetic data, has no backend and saves nothing.
 
 ## Start here
 

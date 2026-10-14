@@ -43,6 +43,11 @@ type Payment = {
   reversed_by: string | null; reversed_at: string | null; reversal_reason: string
   allocations: { id: string; invoice: string; invoice_number: string; amount: string; reversed_by: string | null; reversal_reason: string }[]
 }
+type DarajaAttempt = {
+  id: string; invoice: string; amount: string; status: 'pending' | 'succeeded' | 'failed' | 'review'
+  checkout_request_id: string | null; payment: string | null; result_code: string; result_description: string
+  created_at: string; updated_at: string
+}
 type Session = { authenticated: boolean; user?: { id: number; username: string }; organizations?: Organization[] }
 
 function dateInputValue(date: Date): string {
@@ -53,6 +58,17 @@ function dateInputValue(date: Date): string {
 
 function decimalIsPositive(value: string): boolean {
   return /[1-9]/.test(value)
+}
+
+function darajaAvailableAmount(invoice: Invoice, attempts: DarajaAttempt[], payments: Payment[]): number {
+  const reserved = attempts.reduce((total, attempt) => {
+    if (attempt.status === 'pending' || attempt.status === 'review') return total + Number(attempt.amount)
+    if (attempt.status !== 'succeeded') return total
+    const payment = payments.find((item) => item.id === attempt.payment)
+    const hasAllocation = payment?.allocations.some((allocation) => !allocation.reversed_by)
+    return hasAllocation ? total : total + Number(attempt.amount)
+  }, 0)
+  return Math.max(0, Number(invoice.outstanding_total) - reserved)
 }
 
 function latestVoidedInvoice(invoices: Invoice[], jobId: number): Invoice | undefined {
@@ -86,8 +102,10 @@ export default function App() {
   const [expenseClaims, setExpenseClaims] = useState<ExpenseClaim[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
+  const [darajaAttempts, setDarajaAttempts] = useState<Record<string, DarajaAttempt[]>>({})
   const [financeCustomers, setFinanceCustomers] = useState<Customer[]>([])
   const [paymentRequestKey, setPaymentRequestKey] = useState(() => crypto.randomUUID())
+  const [darajaRequestKeys, setDarajaRequestKeys] = useState<Record<string, string>>({})
   const [customerStatus, setCustomerStatus] = useState<'active' | 'archived' | 'all'>('active')
   const [customerSearch, setCustomerSearch] = useState('')
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
@@ -126,12 +144,18 @@ export default function App() {
         return [job.id, result.results] as const
       }))
       : []
-    setCustomers(customerData.results); setQuotations(quoteData.results); setJobs(jobData.results); setTimeEntries(Object.fromEntries(timeEntryResults)); setExpenseClaims(expenseData.results); setInvoices(invoiceData.results); setPayments(paymentData.results); setFinanceCustomers(financeCustomerData.results); setError('')
+    const darajaAttemptResults = canViewInvoices
+      ? await Promise.all(invoiceData.results.map(async (invoice) => {
+        const result = await api<{ results: DarajaAttempt[] }>(`/api/organizations/${organization}/invoices/${invoice.id}/daraja/sandbox-attempts/`)
+        return [invoice.id, result.results] as const
+      }))
+      : []
+    setCustomers(customerData.results); setQuotations(quoteData.results); setJobs(jobData.results); setTimeEntries(Object.fromEntries(timeEntryResults)); setExpenseClaims(expenseData.results); setInvoices(invoiceData.results); setPayments(paymentData.results); setDarajaAttempts(Object.fromEntries(darajaAttemptResults)); setFinanceCustomers(financeCustomerData.results); setError('')
   }, [organization, customerStatus, customerSearch, canViewInvoices, canViewTimeEntries])
 
   useEffect(() => { refreshSession().catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false)) }, [])
   useEffect(() => {
-    if (!session?.authenticated || !organization) { setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setExpenseClaims([]); setInvoices([]); return }
+    if (!session?.authenticated || !organization) { setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setExpenseClaims([]); setInvoices([]); setDarajaAttempts({}); return }
     refreshData().catch((reason: Error) => setError(reason.message))
   }, [session, organization, refreshData])
 
@@ -335,6 +359,39 @@ export default function App() {
     } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
   }
 
+  async function createDarajaAttempt(event: FormEvent<HTMLFormElement>, invoice: Invoice) {
+    event.preventDefault(); setError('')
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
+    const phoneNumber = String(form.get('phone_number') || '').trim()
+    if (!window.confirm(`Send a sandbox M-Pesa Express request to ${phoneNumber}? Continue only if you control this number. This is not a live payment.`)) return
+    setSaving(true)
+    const requestKey = darajaRequestKeys[invoice.id] || crypto.randomUUID()
+    setDarajaRequestKeys((current) => ({ ...current, [invoice.id]: requestKey }))
+    try {
+      await api(`/api/organizations/${organization}/invoices/${invoice.id}/daraja/sandbox-attempts/`, {
+        method: 'POST',
+        headers: { ...csrfHeader(), 'Idempotency-Key': requestKey },
+        body: JSON.stringify({ amount: form.get('amount'), phone_number: phoneNumber }),
+      })
+      setDarajaRequestKeys((current) => ({ ...current, [invoice.id]: crypto.randomUUID() }))
+      await refreshData()
+    } catch (reason) {
+      setError(`${(reason as Error).message} If the request outcome is uncertain, refresh this invoice before retrying.`)
+    } finally { setSaving(false) }
+  }
+
+  async function refreshDarajaAttempt(invoice: Invoice, attempt: DarajaAttempt) {
+    setError(''); setSaving(true)
+    try {
+      const updated = await api<DarajaAttempt>(`/api/organizations/${organization}/daraja/sandbox-attempts/${attempt.id}/`)
+      setDarajaAttempts((current) => ({
+        ...current,
+        [invoice.id]: (current[invoice.id] || []).map((item) => item.id === updated.id ? updated : item),
+      }))
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
   async function recordPayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(''); setSaving(true)
     const formElement = event.currentTarget; const form = new FormData(formElement)
@@ -400,7 +457,7 @@ export default function App() {
 
   async function signOut() {
     await api('/api/session/', { method: 'DELETE', headers: csrfHeader() })
-    setSession({ authenticated: false }); setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setExpenseClaims([]); setInvoices([]); setPayments([]); setFinanceCustomers([])
+    setSession({ authenticated: false }); setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setExpenseClaims([]); setInvoices([]); setPayments([]); setDarajaAttempts({}); setFinanceCustomers([])
   }
 
   if (loading) return <main className="loading">Loading your workspace…</main>
@@ -508,15 +565,39 @@ export default function App() {
             </form>
           </section>
           <section className="panel invoice-register"><div className="panel-heading"><div><h2>Invoice register</h2><p>Balances use active allocations and the invoice's source currency. These are operational receivables, not accounting balances.</p></div></div>
-            {invoices.length ? <div className="invoice-list">{invoices.map((invoice) => <article className="invoice-card" key={invoice.id}>
+            {invoices.length ? <div className="invoice-list">{invoices.map((invoice) => {
+              const invoiceAttempts = darajaAttempts[invoice.id] || []
+              const availableForDaraja = darajaAvailableAmount(invoice, invoiceAttempts, payments)
+              return <article className="invoice-card" key={invoice.id}>
               <div className="invoice-top"><div><strong>{invoice.invoice_number}</strong><span className="quote-id">{invoice.customer_name} · Job #{invoice.job_id}{invoice.replaces_invoice_number ? ` · Replaces ${invoice.replaces_invoice_number}` : ''}</span></div><span className={`quote-status ${invoice.status}`}>{invoice.status}</span></div>
               <div className="invoice-facts"><span>Issued {invoice.issue_date}</span><span>Due {invoice.due_date}</span><span className={`quote-status ${invoice.payment_state}`}>{invoice.payment_state}</span><strong>Issued {invoice.currency} {invoice.total}</strong></div>
               {invoice.status === 'issued' && <div className="invoice-balance"><span>Allocated {invoice.currency} {invoice.allocated_total}</span><strong>Outstanding {invoice.currency} {invoice.outstanding_total}</strong></div>}
+              {invoice.status === 'issued' && invoice.currency === 'KES' && availableForDaraja >= 1 && <section className="daraja-invoice-panel" aria-label={`Sandbox M-Pesa Express for ${invoice.invoice_number}`}>
+                <div><strong>Request a sandbox M-Pesa prompt</strong><p>Sandbox only. Use a phone number you control. This does not make a live payment or create a finance receipt.</p></div>
+                <form className="daraja-attempt-form" onSubmit={(event) => createDarajaAttempt(event, invoice)}>
+                  <label>Phone number<input name="phone_number" type="tel" inputMode="tel" autoComplete="off" placeholder="07… or +254…" pattern="(?:\+?254|0)?[17]\d{8}" maxLength={13} required /></label>
+                  <label>Amount (KES)<input name="amount" type="number" min="1" max={Math.floor(availableForDaraja)} step="1" defaultValue={Math.floor(availableForDaraja)} required /></label>
+                  <button className="quiet-action" disabled={saving}>Send sandbox prompt</button>
+                </form>
+                <small>The phone number is stored with the attempt so the provider response can be checked. Available for another attempt: KES {Math.floor(availableForDaraja)}.</small>
+              </section>}
+              {invoice.status === 'issued' && invoice.currency === 'KES' && availableForDaraja < 1 && invoiceAttempts.some((attempt) => ['pending', 'review', 'succeeded'].includes(attempt.status)) && <p className="daraja-reserved-note">No whole KES amount is available for another prompt. Review unresolved attempts or allocate a confirmed receipt first.</p>}
+              {invoiceAttempts.length > 0 && <section className="daraja-attempt-list" aria-label={`Sandbox M-Pesa attempts for ${invoice.invoice_number}`}>
+                <h3>Sandbox M-Pesa attempts</h3>
+                {invoiceAttempts.map((attempt) => <article className="daraja-attempt" key={attempt.id}>
+                  <div className="daraja-attempt-top"><strong>KES {attempt.amount}</strong><span className={`quote-status ${attempt.status}`}>{attempt.status === 'review' ? 'needs review' : attempt.status}</span></div>
+                  <small>Started {new Date(attempt.created_at).toLocaleString()}</small>
+                  {attempt.result_description && <p>{attempt.result_description}</p>}
+                  {attempt.checkout_request_id && <p>Checkout reference: <code>{attempt.checkout_request_id}</code></p>}
+                  {attempt.status === 'succeeded' && <p>{attempt.payment ? 'A finance receipt is linked to this attempt. Review its allocation in Payment receipts below.' : 'Provider success is not a finance receipt. Record the confirmed receipt in Payment receipts using this checkout reference, then allocate it to the invoice.'}</p>}
+                  <button className="quiet-action" type="button" onClick={() => refreshDarajaAttempt(invoice, attempt)} disabled={saving}>Refresh status</button>
+                </article>)}
+              </section>}
               <div className="invoice-lines">{invoice.lines.map((line) => <div key={line.position}><span>{line.description} · {line.quantity} × {invoice.currency} {line.unit_price}</span><strong>{invoice.currency} {line.line_total}</strong></div>)}</div>
               {invoice.correction_reason && <p className="invoice-correction-note">Replacement reason: {invoice.correction_reason}</p>}
               {invoice.status === 'void' && <p className="invoice-void-note">Voided by {invoice.voided_by} · {invoice.voided_at ? new Date(invoice.voided_at).toLocaleString() : ''} · {invoice.void_reason}</p>}
               {invoice.status === 'issued' && <details className="invoice-void"><summary>Correct this invoice</summary><p>Voiding keeps this number and record. Reverse its active payment allocations first, then issue a replacement from the completed job.</p><form className="job-inline-form" onSubmit={(event) => voidInvoice(event, invoice)}><input name="reason" maxLength={240} placeholder="Reason for correction" aria-label={`Reason for voiding ${invoice.invoice_number}`} required /><button className="quiet-action" disabled={saving || decimalIsPositive(invoice.allocated_total)}>Void invoice</button></form></details>}
-            </article>)}</div> : <div className="empty-state"><div className="empty-icon">▤</div><strong>No invoices issued</strong><p>Complete a job, then issue an invoice from its job card.</p></div>}
+            </article>})}</div> : <div className="empty-state"><div className="empty-icon">▤</div><strong>No invoices issued</strong><p>Complete a job, then issue an invoice from its job card.</p></div>}
           </section>
           <section className="panel payment-register"><div className="panel-heading"><div><h2>Payment receipts</h2><p>Manual receipt records stay visible after reversal. Each receipt can be allocated across matching invoices.</p></div></div>
             {payments.length ? <div className="payment-list">{payments.map((payment) => {

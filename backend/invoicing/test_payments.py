@@ -320,6 +320,36 @@ class PaymentWorkflowTests(TestCase):
         self.assertEqual(over_reserved.status_code, 409)
         self.assertEqual(initiate.call_count, 1)
 
+    def test_daraja_attempt_list_is_role_and_organization_scoped(self):
+        attempt = DarajaPaymentAttempt.objects.create(
+            organization=self.organization,
+            invoice=self.invoice,
+            customer=self.customer,
+            amount=Decimal("5.00000"),
+            phone_number="254700000000",
+            idempotency_key=uuid4(),
+            created_by=self.finance,
+        )
+        url = reverse(
+            "daraja-attempt-create", args=[self.organization.pk, self.invoice.pk]
+        )
+
+        self.client.force_login(self.finance)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in response.json()["results"]], [str(attempt.pk)]
+        )
+        self.assertNotIn("phone_number", response.json()["results"][0])
+
+        self.client.force_login(self.sales)
+        unauthorized = self.client.get(url)
+        self.assertEqual(unauthorized.status_code, 403)
+
+        self.client.force_login(self.outsider)
+        cross_organization = self.client.get(url)
+        self.assertEqual(cross_organization.status_code, 404)
+
     @override_settings(
         DARAJA_CONSUMER_KEY="sandbox-key",
         DARAJA_CONSUMER_SECRET="sandbox-secret",

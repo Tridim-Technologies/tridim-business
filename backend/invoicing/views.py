@@ -561,11 +561,23 @@ def _invoice_active_attempt_reservations(invoice):
     return reserved
 
 
-@require_http_methods(["POST"])
+@require_http_methods(["GET", "POST"])
 def daraja_payment_attempt_create_view(request, organization_id, invoice_id):
     _, error = _membership(request, organization_id)
     if error:
         return error
+    if request.method == "GET":
+        invoice = Invoice.objects.filter(
+            organization_id=organization_id, pk=invoice_id
+        ).first()
+        if invoice is None:
+            return JsonResponse({"detail": "Invoice not found."}, status=404)
+        attempts = DarajaPaymentAttempt.objects.filter(
+            organization_id=organization_id, invoice=invoice
+        ).order_by("-created_at")
+        return JsonResponse(
+            {"results": DarajaPaymentAttemptSerializer(attempts, many=True).data}
+        )
     if not daraja_is_configured():
         return JsonResponse(
             {"detail": "Daraja sandbox payments are not configured."}, status=503

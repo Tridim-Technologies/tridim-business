@@ -6,7 +6,8 @@ prompt initiation and the matching **M-Pesa Express query** with
 API is a separate capability and is not used for STK checkout verification.
 
 This is a sandbox integration only. Use synthetic organizations, customers,
-phone numbers, invoices, and Daraja sandbox credentials. The app rejects a
+invoices, and Daraja sandbox credentials. For a handset test, enter only a
+phone number you control; do not use a customer number. The app rejects a
 non-sandbox `DARAJA_ENV`; there is no live payment configuration in this
 release.
 
@@ -28,6 +29,26 @@ them in logs.
 The connector stays unavailable until all credentials and the HTTPS callback
 URL are configured.
 
+## Finance UI flow
+
+Owners, admins, and finance members can open **Invoices** and start a sandbox
+M-Pesa Express attempt on an issued KES invoice with available balance. Enter
+a Kenyan phone number and a whole-KES amount no greater than the available
+balance, then confirm the browser prompt. The attempt and its status remain
+visible on that invoice after reloading the page. Choose **Refresh status** to
+see a callback/query result received since the page was opened.
+
+The normalized phone number is stored on the attempt so the provider result can
+be checked against the original request. It is not returned by the attempt
+listing API or shown in the UI. Use only a phone number you control for this
+sandbox test. Sandbox attempts are not live payments and do not create finance
+receipts.
+
+When an attempt is confirmed as successful, record the receipt through the
+existing **Payment receipts** workflow. Select the invoice customer, use the
+confirmed amount, choose **Mobile money**, and use the attempt's checkout
+reference as the receipt reference. Then allocate that receipt to the invoice.
+
 ## API flow
 
 1. An authenticated owner, admin, or finance member sends a `POST` to
@@ -39,6 +60,8 @@ URL are configured.
 3. The response contains the local attempt ID and Daraja checkout request ID.
    Poll its organization-scoped resource at
    `/api/organizations/{organization_id}/daraja/sandbox-attempts/{attempt_id}/`.
+   Finance can also reload attempts for that invoice with `GET` on the
+   initiation endpoint.
 4. Daraja posts an asynchronous callback to the configured URL. The app stores
    a minimized callback summary with a hash of the payer number, deduplicates
    by `CheckoutRequestID`, and queries M-Pesa Express using that ID. A callback
