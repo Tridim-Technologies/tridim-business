@@ -44,11 +44,12 @@ These are starting profiles, not substitutes for organization-scoped policy. Eac
 
 - An accepted job has an owner, status, planned work, assigned staff and customer link.
 - Manager assigns or reassigns staff; changes are visible to affected users and retained in history.
-- Employees submit time entries for assigned jobs. Expense claims will record date, amount, currency, job, and reviewable evidence. Use [ADR-005](ADR-005-EXPENSE-EVIDENCE-HANDLING.md) for the evidence lifecycle and security baseline.
+- Employees submit time entries for assigned jobs. The [expense claim MVP workflow](EXPENSE_CLAIM_MVP_WORKFLOW.md) defines one expense per claim, exact amount/currency, job, category, purpose, review roles, and state transitions. [ADR-005](ADR-005-EXPENSE-EVIDENCE-HANDLING.md) defines the receipt lifecycle and security baseline.
 - Job time entries are submitted by assigned staff with work date, hours, and an optional work description. Owner/admin/operations roles approve or reject with a reason; corrections preserve prior submission and review history. Hours are operational records and do not automatically create invoice charges or accounting entries.
-- Expense claims and receipt evidence remain unimplemented. Do not enable uploads or real evidence until a private storage adapter, quarantine/scanning path, access controls, and customer/jurisdiction retention and deletion schedule are selected and verified under ADR-005.
-- Managers approve, reject, or request more information with a recorded reason. Missing-receipt exceptions require an authorized, audited waiver; submitted claim/evidence versions are not silently overwritten.
-- Keep evidence linked to the specific claim/expense line. A single-claim MVP is the default starting point; multi-line expense reports require workflow validation before they are added.
+- Expense claims and receipt evidence remain unimplemented. The claim workflow can be built with synthetic records. Do not enable uploads or real evidence until a private storage adapter, quarantine/scanning path, access controls, and customer/jurisdiction retention and deletion schedule are selected and verified under ADR-005.
+- An assigned member submits a claim; owner/admin/operations roles review another person's claim. Reviewers cannot approve or waive their own claims. Return, rejection, waiver, and withdrawal preserve an event history; returned claims resubmit as a new version.
+- A receipt is required by default. A claimant may submit with a missing-receipt explanation; approval then requires a reasoned waiver by an authorized reviewer. A client-supplied evidence flag cannot satisfy the requirement.
+- Keep evidence linked to the specific claim. Multi-line expense reports require workflow validation before they are added. Finance sees approved metadata only in the MVP; it has no default receipt access.
 - The initial file-policy recommendation is JPEG, PNG, and PDF with bounded per-file and per-claim limits. Unsupported active or compound formats are rejected. The exact defaults and any external processing must follow ADR-005.
 - Approved costs are available for job reporting and invoicing decisions but are not automatically treated as accounting expenses without an agreed accounting design.
 

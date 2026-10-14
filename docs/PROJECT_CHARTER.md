@@ -47,7 +47,7 @@ Proceed using the available product requirements and stated founder direction. K
 ## Core principles
 
 - Deliver one coherent job-to-cash workflow before expanding module count.
-- Use Microsoft Dynamics, SAP, Oracle and other business platforms as ongoing capability benchmarks. Study their workflows, controls, integration patterns and tradeoffs; choose improvements that make Tridim Business clearer, more approachable, portable and useful for its intended customers. Build an original product rather than copying proprietary screens, text, branding or implementation. Validate any claim that the product is simpler or better through customer and comparative evaluation.
+- Study established business software as an ongoing capability benchmark. Choose improvements that make Tridim Business clearer, more approachable, portable and useful for its intended customers. Build an original product and validate any claim that it is simpler or better through customer and comparative evaluation.
 - Record competitor-informed product decisions in the relevant public or enterprise roadmap/ADR, keeping enterprise-only details in the separate enterprise repository.
 - Keep enterprise-only product direction and documentation in the separate enterprise repository.
 - Prefer reusable documented interfaces and avoid duplicated core business logic.

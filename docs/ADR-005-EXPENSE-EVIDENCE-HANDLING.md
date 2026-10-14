@@ -10,7 +10,9 @@
 
 The MVP includes employee expense claims, but currently has no expense-claim or file-upload implementation. Receipts can contain names, addresses, payment details, travel patterns, and unrelated personal information. A receipt must remain attached to the right organization and claim, available only to authorized people, and governed by a lifecycle that works across storage, backups, exports, and deletion.
 
-The product draws capability ideas from business suites such as Microsoft Dynamics 365, SAP Concur, Oracle Fusion Cloud, and other ERP/expense products. Their public guidance illustrates useful patterns: mobile capture and upload, reusable receipt inboxes, evidence at expense-line or report level, policy-based receipt requirements, and a review/audit path for missing evidence. The design here uses those patterns as a benchmark, not as a specification to copy. Tridim Business should aim to make the common path simpler, keep evidence portable, make privacy controls understandable, and avoid adding automation or configuration that customers do not need. Whether this is better must be established through product evaluation.
+Established business software illustrates useful patterns: mobile capture and upload, reusable receipt inboxes, evidence at expense-line or report level, policy-based receipt requirements, and a review path for missing evidence. Tridim Business should make the common path simple, keep evidence portable, make privacy controls understandable, and avoid adding automation or configuration that customers do not need. Comparative product claims require evaluation.
+
+The one-expense-per-claim shape, reviewer permissions, and receipt exception flow are defined in the [expense claim MVP workflow](EXPENSE_CLAIM_MVP_WORKFLOW.md).
 
 ## Decision
 
@@ -27,17 +29,17 @@ The product draws capability ideas from business suites such as Microsoft Dynami
 11. **Treat backups and exports as additional copies.** Document encryption, access, retention, restore, and deletion behavior for file backups separately from database backups. A restore must reconcile expired/deleted evidence before users can access restored records. An authorized export may include originals and a manifest with claim/evidence IDs, hashes, media types, and timestamps; record who exported it and when. Do not email evidence as an attachment. Create temporary export bundles in private storage with a short expiry and automatic purge.
 12. **Do not send evidence to AI or other processors by default.** OCR, duplicate detection, receipt extraction, or third-party processing are later opt-in capabilities. Before enabling one, disclose the processor and purpose, limit fields sent, define processor retention/training behavior, get organization authorization, and provide a manual path. Any extracted values are suggestions for the employee to verify, never authoritative financial data.
 
-## Recommended product shape
+## Product shape
 
-| Benchmark capability | Product response |
+| Capability pattern | Product response |
 |---|---|
 | Mobile camera/file capture and receipt association | Make direct capture or a simple file picker the common path; keep the initial workflow attached to the individual expense claim so evidence has a clear owner. Add an unattached receipt inbox only if discovery shows it solves a real workflow problem. |
-| Receipt rules and missing-evidence holds | Start with a small, understandable rule per organization and expense category. Explain missing evidence before submission. Allow only an authorized reviewer to waive a requirement, with a reason and audit history. Add amount thresholds and more complex policies only after validation. |
+| Receipt rules and missing-evidence holds | Require a receipt for each MVP claim or an explicit missing-receipt explanation followed by a reasoned reviewer waiver. Explain missing evidence before submission. Add organization/category thresholds and more complex policies only after validation. |
 | Review, request-more-information, correction, and audit | Keep claim status and evidence version history together; return a claim with a clear reason and let the submitter add a new version without erasing what was reviewed. |
 | OCR or automated extraction | Defer by default. If later introduced, require explicit opt-in, show extracted fields for confirmation, and never make an unreviewed extraction alter approved financial records. |
 | Large configurable ERP attachment systems | Prefer private-by-default storage, visible retention state, portable exports, and a few coherent controls over exposing infrastructure settings to each business. |
 
-This is an initial public-core product direction. Advanced configurable policies, automated audit selection, OCR, and integrations remain candidates for separate validation and may belong in the enterprise edition only after the public/enterprise boundary is deliberately documented.
+Advanced configurable policies, automated audit selection, OCR, and integrations remain candidates for separate validation.
 
 ## Threats and required controls
 
@@ -63,24 +65,11 @@ This is an initial public-core product direction. Advanced configurable policies
 
 ## Open decisions before implementation or real-data use
 
-- Confirm whether the initial workflow is one claim per expense or whether employees need multi-line reports; keep each file attached to an unambiguous claim or line.
-- Confirm initial receipt-required behavior, reviewer roles, and whether finance needs evidence access beyond an assigned review task.
+- Revisit one-claim-per-expense, reviewer permissions, and the default receipt rule only if workflow evaluation shows the [MVP baseline](EXPENSE_CLAIM_MVP_WORKFLOW.md) is unsuitable. Finance has approved-claim metadata access in that baseline; any evidence access needs a separate decision.
 - Select the file scanner, supported isolation boundary, private storage provider/adapter, encryption and key ownership, storage regions, and monitoring owner.
 - Obtain customer/accounting/privacy advice for each deployment's retention period, legal holds, export obligations, and deletion from backups.
 - Verify exact file limits against expected mobile capture conditions and accessibility needs.
 - Agree on support escalation and breach-response steps specifically for evidence objects.
 - Review data-processing terms before enabling OCR, document preview services, email ingestion, or another external processor.
 
-No cloud service, storage bucket, scanner, retention duration, expense claim implementation, or real-data evaluation is authorized by this ADR. Deployment remains deferred.
-
-## Benchmark references
-
-Official product documentation reviewed 14 October 2026. These pages support capability observations only; product availability and behavior may change.
-
-- Microsoft Dynamics 365 Project Operations, [Manage expenses with the mobile app](https://learn.microsoft.com/en-us/dynamics365/project-operations/expense/mobile-app-manage-expenses) — camera, device upload, receipt association/change/detach, and unattached receipt behavior.
-- Microsoft Dynamics 365 Finance, [Configure document management](https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/organization-administration/configure-document-management) — attachment storage locations, file-type controls, virus scanning, attachment history, export, and recovery topics.
-- Microsoft Dynamics 365 Project Operations, [Define expense policies](https://learn.microsoft.com/en-us/dynamics365/project-operations/expense/set-up-policies) — date-effective expense rules and error/justification outcomes.
-- SAP Concur, [Upload a receipt image](https://help.sap.com/docs/CONCUR_EXPENSE/f45ee181c99e4d93afbab48a5b75ea50/e90d98bc90cd4b1e9e86b904f7d1f649.html) and [receipt image overview](https://help.sap.com/docs/CONCUR_EXPENSE/cd24ad794821491e8f65f76f61dffcc6/e319217953c0454faa1c3d1b2daa5812.html) — receipt libraries, report/expense attachment levels, accepted formats, and company receipt policies.
-- SAP Concur, [Hold for Receipt Image](https://help.sap.com/docs/CONCUR_EXPENSE/bb83754b1c5541808d50c09901e11475/a31bcde9e8fb40c582bc67f480986452.html) — optional workflow hold until required receipt images are attached.
-- Oracle Fusion Cloud Financials, [Options for setting up receipt management rules](https://docs.oracle.com/en/cloud/saas/financials/26b/faiex/options-for-setting-up-receipt-management-rules.html) and [expense report approval](https://docs.oracle.com/en/cloud/saas/financials/26b/fawde/expense-report-approval.html) — receipt rules at organization/template/expense-type levels and configurable approval routing.
-- Oracle Fusion Cloud Financials, [Audit Actions](https://docs.oracle.com/en/cloud/saas/financials/26b/fawde/audit-actions.html) — audit outcomes including reject, request more information, waive receipts, and release hold.
+This ADR alone does not authorize a cloud service, storage bucket, scanner, retention duration, real-data evaluation, or production deployment. The separate workflow document defines claim behavior for a synthetic build.
