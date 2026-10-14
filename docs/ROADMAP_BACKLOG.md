@@ -31,6 +31,8 @@ This backlog turns the existing product plan into an implementation sequence. It
 
 **Implementation progress:** P2 delivered job delivery and invoicing in v0.5.0. Issue #11 shipped auditable job status, assignments, due dates, and delivery notes; issue #13 shipped the internal invoice register with per-organization annual numbering, void-and-reissue history, and owner/finance invoice visibility. Issue #47 adds assigned-staff time entry and manager approval. Issue #49 defines the private evidence lifecycle in [ADR-005](ADR-005-EXPENSE-EVIDENCE-HANDLING.md); issue #51 defines the [expense claim MVP workflow](EXPENSE_CLAIM_MVP_WORKFLOW.md); issue #53 implements the [synthetic claim core](EXPENSE_CLAIM_ALPHA.md). Receipt upload and real-data use remain gated on the ADR-005 controls. Tax, payment allocation, and jurisdictional compliance are outside P2.
 
+**Core HR increment:** Issue #59 adds the first work-only employee directory linked to organization memberships. It is limited to manager-maintained work profiles and active-directory viewing; leave management, invitations, payroll, and sensitive identity records remain separate work.
+
 ## P3 — Payments and reconciliation
 
 - Begin with explicit manual payment recording and allocation.

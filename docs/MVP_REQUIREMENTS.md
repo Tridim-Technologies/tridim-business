@@ -82,6 +82,8 @@ These are starting profiles, not substitutes for organization-scoped policy. Eac
 ### Core HR
 
 - Authorized HR/owner user maintains employee, department and employment-status records.
+- In the current internal alpha, owner/admin/operations users can create and update a minimal organization-scoped employee directory profile (display name, job title, department and active status); employees can read active profiles. The directory does not expose personal email, salary, payroll, government identifiers or home addresses, and a profile does not grant account access.
+- Directory profiles are linked to existing organization membership. Only active member accounts appear; managers can review inactive profiles. This profile increment does not implement employee invitations, leave balances or employment-contract records.
 - Employees submit leave requests; approvers decide with recorded outcome and date.
 - Employees see only allowed personal profile and leave information.
 - Payroll calculations, payslips, tax submissions and statutory filing are out of MVP scope until separately validated and approved.
