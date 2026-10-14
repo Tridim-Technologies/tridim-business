@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.12.0 (2026-10-14)
+
+### Features
+
+- **payments**: Add sandbox Daraja invoice UI
+  ([#56](https://github.com/Tridim-Technologies/tridim-business/pull/56),
+  [`368410e`](https://github.com/Tridim-Technologies/tridim-business/commit/368410e2c2d831213291cfa0acf32386c7ca11c7))
+
+
 ## v0.11.0 (2026-10-14)
 
 ### Documentation
