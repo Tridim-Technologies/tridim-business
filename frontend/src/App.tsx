@@ -384,7 +384,9 @@ export default function App() {
   async function refreshDarajaAttempt(invoice: Invoice, attempt: DarajaAttempt) {
     setError(''); setSaving(true)
     try {
-      const updated = await api<DarajaAttempt>(`/api/organizations/${organization}/daraja/sandbox-attempts/${attempt.id}/`)
+      const updated = await api<DarajaAttempt>(`/api/organizations/${organization}/daraja/sandbox-attempts/${attempt.id}/reconcile/`, {
+        method: 'POST', headers: csrfHeader(),
+      })
       setDarajaAttempts((current) => ({
         ...current,
         [invoice.id]: (current[invoice.id] || []).map((item) => item.id === updated.id ? updated : item),

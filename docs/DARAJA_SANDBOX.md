@@ -36,7 +36,9 @@ M-Pesa Express attempt on an issued KES invoice with available balance. Enter
 a Kenyan phone number and a whole-KES amount no greater than the available
 balance, then confirm the browser prompt. The attempt and its status remain
 visible on that invoice after reloading the page. Choose **Refresh status** to
-see a callback/query result received since the page was opened.
+retry verification through the M-Pesa Express query after a callback has been
+stored. A query acknowledgement without a final result leaves the attempt
+pending.
 
 The normalized phone number is stored on the attempt so the provider result can
 be checked against the original request. It is not returned by the attempt
@@ -66,22 +68,27 @@ reference as the receipt reference. Then allocate that receipt to the invoice.
    a minimized callback summary with a hash of the payer number, deduplicates
    by `CheckoutRequestID`, and queries M-Pesa Express using that ID. A callback
    alone never marks a payment successful.
-5. The app requires the query response to echo the stored checkout and
-   merchant request IDs. For success it also checks the callback result,
-   amount, and phone against the immutable attempt. Mismatches and uncertain
-   responses remain in `review`; they do not create a ledger receipt.
+5. The app first requires the query response to echo the stored checkout and
+   merchant request IDs. A matching query response without a final `ResultCode`
+   (for example, an acceptance response with `ResponseCode` and
+   `ResponseDescription`) leaves the attempt pending. **Refresh status** retries
+   the query for a stored callback. A final response must agree with the
+   callback result; success also requires the callback amount and phone hash to
+   match the immutable attempt. Identifier or final-result mismatches remain in
+   `review`; they do not create a ledger receipt.
 6. A confirmed provider success is visible on the attempt. Finance records the
    receipt through the existing payment workflow using the checkout request ID
    as its reference, then explicitly allocates that receipt to the invoice.
    This release does not automatically create or allocate a `Payment` from a
    provider callback.
 
-Finance can retry status verification for an attempt with a stored callback
-using `POST` on
+The **Refresh status** action retries status verification for an attempt with a
+stored callback using `POST` on
 `/api/organizations/{organization_id}/daraja/sandbox-attempts/{attempt_id}/reconcile/`.
 The endpoint requires the same organization finance authorization as other
 payment operations. An attempt without a checkout ID or callback cannot be
-retried automatically; review it before doing anything else.
+retried automatically and returns a conflict response. A non-final query keeps
+the callback event unprocessed so a later refresh can query it again.
 
 ## Safety boundary
 
