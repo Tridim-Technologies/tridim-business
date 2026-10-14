@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.13.0 (2026-10-14)
+
+### Features
+
+- **hr**: Add organization employee directory
+  ([#60](https://github.com/Tridim-Technologies/tridim-business/pull/60),
+  [`9252a4a`](https://github.com/Tridim-Technologies/tridim-business/commit/9252a4a07a40b6effb086b7c6dd11796f8665912))
+
+
 ## v0.12.1 (2026-10-14)
 
 ### Bug Fixes
