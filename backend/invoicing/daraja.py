@@ -145,7 +145,6 @@ def query_matches_attempt(response, attempt):
     return (
         response.get("CheckoutRequestID") == attempt.checkout_request_id
         and response.get("MerchantRequestID") == attempt.merchant_request_id
-        and is_final_query(response)
     )
 
 

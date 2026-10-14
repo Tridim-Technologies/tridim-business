@@ -703,6 +703,86 @@ class PaymentWorkflowTests(TestCase):
     )
     @patch("invoicing.views.initiate_stk_push")
     @patch("invoicing.views.query_stk_push")
+    def test_non_final_query_ack_stays_pending_until_reconciled(self, query, initiate):
+        initiate.return_value = {
+            "ResponseCode": "0",
+            "MerchantRequestID": "merchant-cancelled",
+            "CheckoutRequestID": "ws_CO_cancelled",
+        }
+        query.side_effect = [
+            {
+                "ResponseCode": "0",
+                "ResponseDescription": "Success. Request accepted for processing",
+                "MerchantRequestID": "merchant-cancelled",
+                "CheckoutRequestID": "ws_CO_cancelled",
+            },
+            {
+                "ResponseCode": "0",
+                "ResponseDescription": "Success. Request accepted for processing",
+                "MerchantRequestID": "merchant-cancelled",
+                "CheckoutRequestID": "ws_CO_cancelled",
+                "ResultCode": "1032",
+                "ResultDesc": "Request Cancelled by user",
+            },
+        ]
+        created = self.post_json(
+            reverse(
+                "daraja-attempt-create",
+                args=[self.organization.pk, self.invoice.pk],
+            ),
+            {"amount": "5", "phone_number": "0700000000"},
+            headers={"Idempotency-Key": str(uuid4())},
+        )
+        self.assertEqual(created.status_code, 202, created.content)
+        callback = {
+            "Body": {
+                "stkCallback": {
+                    "MerchantRequestID": "merchant-cancelled",
+                    "CheckoutRequestID": "ws_CO_cancelled",
+                    "ResultCode": 1032,
+                    "ResultDesc": "Request Cancelled by user",
+                }
+            }
+        }
+        callback_response = self.client.post(
+            reverse("daraja-stk-callback"),
+            data=json.dumps(callback),
+            content_type="application/json",
+        )
+        attempt = DarajaPaymentAttempt.objects.get(pk=created.json()["id"])
+        event = DarajaCallbackEvent.objects.get(checkout_request_id="ws_CO_cancelled")
+        self.assertEqual(callback_response.status_code, 200)
+        self.assertEqual(attempt.status, DarajaPaymentAttempt.Status.PENDING)
+        self.assertFalse(attempt.result_code)
+        self.assertIsNone(event.processed_at)
+        self.assertEqual(Payment.objects.count(), 0)
+
+        self.client.force_login(self.finance)
+        reconciled = self.client.post(
+            reverse(
+                "daraja-attempt-reconcile",
+                args=[self.organization.pk, attempt.pk],
+            )
+        )
+        attempt.refresh_from_db()
+        event.refresh_from_db()
+        self.assertEqual(reconciled.status_code, 200, reconciled.content)
+        self.assertEqual(attempt.status, DarajaPaymentAttempt.Status.FAILED)
+        self.assertEqual(attempt.result_code, "1032")
+        self.assertEqual(attempt.result_description, "Request Cancelled by user")
+        self.assertIsNotNone(event.processed_at)
+        self.assertEqual(query.call_count, 2)
+        self.assertEqual(Payment.objects.count(), 0)
+
+    @override_settings(
+        DARAJA_CONSUMER_KEY="sandbox-key",
+        DARAJA_CONSUMER_SECRET="sandbox-secret",
+        DARAJA_SHORTCODE="174379",
+        DARAJA_PASSKEY="sandbox-passkey",
+        DARAJA_CALLBACK_URL="https://example.invalid/api/payments/daraja/sandbox/stk/callback/",
+    )
+    @patch("invoicing.views.initiate_stk_push")
+    @patch("invoicing.views.query_stk_push")
     def test_manual_receipt_links_to_confirmed_attempt_before_allocation(
         self, query, initiate
     ):
