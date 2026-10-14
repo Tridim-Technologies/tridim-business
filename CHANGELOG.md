@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v0.11.0 (2026-10-14)
+
+### Documentation
+
+- **expenses**: Define MVP claim workflow and permissions
+  ([#52](https://github.com/Tridim-Technologies/tridim-business/pull/52),
+  [`68718be`](https://github.com/Tridim-Technologies/tridim-business/commit/68718beaace2449ffedb2d34161cd33cc0d7d332))
+
+- **expenses**: Define private evidence handling policy
+  ([#50](https://github.com/Tridim-Technologies/tridim-business/pull/50),
+  [`d3027e3`](https://github.com/Tridim-Technologies/tridim-business/commit/d3027e32e3c7eb0f4f495de62034a547ed30c8bb))
+
+### Features
+
+- **expenses**: Add synthetic claim review flow
+  ([#54](https://github.com/Tridim-Technologies/tridim-business/pull/54),
+  [`6138258`](https://github.com/Tridim-Technologies/tridim-business/commit/6138258e8e8c02992786e37e4a0a5cf51ca0a3d0))
+
+
 ## v0.10.0 (2026-10-11)
 
 ### Features
