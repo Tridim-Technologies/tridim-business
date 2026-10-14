@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import path
 from health.views import health_live_view, health_ready_view
+from hr.views import employee_detail_view, employees_view
 
 from accounts.views import csrf_token, session_view, organizations_view
 from customers.views import customer_detail_view, customers_view
@@ -52,6 +53,16 @@ urlpatterns = [
         name="daraja-stk-callback",
     ),
     path("api/organizations/", organizations_view, name="organizations"),
+    path(
+        "api/organizations/<uuid:organization_id>/employees/",
+        employees_view,
+        name="employees",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/employees/<int:profile_id>/",
+        employee_detail_view,
+        name="employee-detail",
+    ),
     path(
         "api/organizations/<uuid:organization_id>/customers/",
         customers_view,
