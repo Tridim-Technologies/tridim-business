@@ -152,6 +152,37 @@ class SupportAccessAuditEvent(models.Model):
         return f"{self.access_type}: {self.model_label} at {self.accessed_at:%Y-%m-%d %H:%M UTC}"
 
 
+class PlatformAdminReadAuditEvent(models.Model):
+    """Metadata for a platform superuser reading a tenant business record."""
+
+    class AccessType(models.TextChoices):
+        LIST = "list", "List viewed"
+        OBJECT = "object", "Record viewed"
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="platform_admin_read_audit_events",
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.PROTECT,
+        related_name="platform_admin_read_audit_events",
+        null=True,
+        blank=True,
+    )
+    accessed_at = models.DateTimeField(default=timezone.now, editable=False)
+    model_label = models.CharField(max_length=100)
+    object_pk = models.CharField(max_length=100, blank=True)
+    access_type = models.CharField(max_length=12, choices=AccessType.choices)
+
+    class Meta:
+        ordering = ["-accessed_at", "id"]
+
+    def __str__(self):
+        return f"{self.access_type}: {self.model_label} at {self.accessed_at:%Y-%m-%d %H:%M UTC}"
+
+
 class EndpointRateLimitBucket(models.Model):
     """Shared, privacy-preserving counters for public endpoint rate limits."""
 
