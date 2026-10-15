@@ -1,6 +1,6 @@
 # Monitoring and Incident Response
 
-**Status:** Core guidance for internal alpha; deployment-specific alerting and named ownership are not yet configured
+**Status:** Core guidance for internal alpha; deployment-specific alerting is not configured
 
 This runbook describes what to observe and how to respond for the public Tridim Business platform. It does not imply that a cloud project, alert channel, on-call rota, service-level objective, or production payment integration exists.
 
@@ -50,45 +50,19 @@ These are suggested internal categories, not customer-facing response-time commi
 5. **Communicate.** Use the approved private channel for responders. Customer or regulator communications require the accountable business/privacy owner and applicable review; no notification deadline is asserted here.
 6. **Close and learn.** Confirm service recovery with health checks and a relevant synthetic workflow. Record timeline, impact, cause if known, recovery actions, data handling, follow-ups, and owners. Review actions without assigning blame.
 
-## Ownership, handoff, and escalation
+## Operational readiness
 
-The roles below define the required handoff; they are not assigned people or an active on-call service. The internal alpha remains limited to local synthetic data until each owner, backup, coverage window, and contact route is assigned and tested.
+The internal alpha remains limited to local synthetic data. Deployment-specific monitoring and alerting are not configured. The following decisions remain open before any real-data evaluation:
 
-| Role | Accountable responsibilities | Primary / backup | Current state |
-|---|---|---|---|
-| Business/service owner | Owns business impact and severity decisions; approves service-level recovery or suspension; coordinates stakeholder updates; approves any external communication with the privacy/security reviewer. | **TBD / TBD** | Unassigned |
-| Technical operator / incident lead | Receives operational alerts; opens the incident record; coordinates technical response; selects safe containment; owns service recovery and technical timeline; hands database restore to an authorized recovery operator. | **TBD / TBD** | Unassigned |
-| Privacy/security reviewer | Leads assessment of suspected disclosure, unauthorized access, or integrity compromise; preserves evidence and advises on access containment; advises the business owner on applicable notification and legal review. | **TBD / TBD** | Unassigned |
-| Recovery operator | Performs approved backup/restore actions, records the recovery point and validation evidence, and gets data-owner approval before cutover or cleanup. This can be the technical operator only if that assignment is explicit. | **TBD / TBD** | Unassigned |
-
-### Escalation sequence
-
-1. **Receive and record.** The designated primary technical operator acknowledges the report through the monitored private alert destination or incident-report route, records the time and safe summary, and assigns an incident identifier. The destination, access list, and acknowledgement expectations are **TBD**; no monitored route is configured today.
-2. **Classify and lead.** The technical operator starts as incident lead, identifies affected services and tenants from approved metadata, and classifies severity using the guidance above. The business/service owner confirms business impact and may raise severity.
-3. **Escalate by impact.** For **SEV 1**, suspected exposure/unauthorized access, or possible financial-record corruption, notify the business/service owner and privacy/security reviewer immediately through the private route; keep the technical operator coordinating containment and evidence preservation. For **SEV 2**, notify the business/service owner and technical backup promptly and engage the recovery operator if data recovery is possible. For **SEV 3**, the technical operator records the issue, assigns a remediation owner, and provides the approved workaround. If the primary is unavailable, the named backup takes the same role; until coverage and response intervals are assigned, no response-time promise is made.
-4. **Contain and recover.** The incident lead chooses the smallest reversible containment action. The privacy/security reviewer leads the suspected-data-exposure assessment. Database restore requires an explicitly authorized recovery operator and follows [Database Backup and Restore](DATABASE_BACKUP_AND_RESTORE.md); record approval before restore and cutover.
-5. **Approve communications and close.** The business/service owner owns stakeholder updates. The privacy/security reviewer advises on external, customer, or regulator communication and required review; only the accountable owner authorizes release. Record recovery evidence, impact, data-handling decisions, and follow-up owners before closing.
-
-Incident records must use the minimum necessary information: incident ID, timestamps, severity, affected service/tenant scope, role assignments, actions, decisions, and opaque audit/event identifiers. Do not copy expense evidence, payment callback bodies, credentials, full phone numbers, or other sensitive payloads into alert text, chat, or issue titles. Preserve source logs and audit records under their existing access and retention controls.
-
-### Ownership and deployment decisions
-
-Complete these assignments and verify the contact path before any real customer data or field evaluation:
-
-| Responsibility / decision | Current status |
+| Decision | Current status |
 |---|---|
-| Business/service owner and backup | **TBD — assign named people** |
-| Technical operator / incident lead and backup | **TBD — assign named people** |
-| Privacy/security reviewer and backup | **TBD — assign named people and escalation route** |
-| Recovery operator and restore/cutover approver | **TBD — assign named people and approval handoff** |
-| Coverage hours and primary-to-backup response interval | **TBD — agree before evaluation; no response target is currently promised** |
-| Alert destination, incident-report route, and access list | **TBD — choose a private monitored route and test delivery/backup handoff** |
 | Hosting provider, project, and region | **TBD — deployment deferred; see [ADR-004](ADR-004-HOSTING-AND-PAYMENT-ACCOUNTS.md)** |
 | Monitoring/logging direction | **Cloud Monitoring and Cloud Logging preferred; no project or services configured** |
+| Alert destination and delivery verification | **Not configured** |
 | Telemetry retention and access policy | **TBD — review and configure before evaluation** |
 | Alert thresholds and service objectives | **TBD — baseline first; approve targets before field evaluation** |
 | Internal-alpha recovery planning targets | **Selected: RPO up to 24 hours, RTO by next business day, seven-day recovery window; not customer commitments** |
 | Hosted recovery configuration and verification | **TBD — not configured; see [Database Backup and Restore](DATABASE_BACKUP_AND_RESTORE.md)** |
 | Daraja production approval and support | **Not enabled — sandbox only; live use requires separate readiness and provider approval** |
 
-Review the owner list and test alert delivery and backup handoff before real-data evaluation, and after any material contact or deployment change. Support access to application data must follow [Admin Support Access](ADMIN_SUPPORT_ACCESS.md).
+Incident records must use the minimum necessary information: incident identifier, timestamps, severity, affected service/tenant scope, actions, decisions, and opaque audit/event identifiers. Do not copy expense evidence, payment callback bodies, credentials, full phone numbers, or other sensitive payloads into alert text, chat, or issue titles. Preserve source logs and audit records under their existing access and retention controls. Support access to application data must follow [Admin Support Access](ADMIN_SUPPORT_ACCESS.md).
