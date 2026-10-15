@@ -50,6 +50,67 @@ class Membership(models.Model):
         return f"{self.user} — {self.organization} ({self.role})"
 
 
+class OrganizationInvitation(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+        REVOKED = "revoked", "Revoked"
+        EXPIRED = "expired", "Expired"
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="invitations"
+    )
+    email = models.EmailField(max_length=254)
+    role = models.CharField(max_length=20, choices=Membership.Role.choices)
+    token_digest = models.CharField(max_length=64, unique=True)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.PENDING
+    )
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sent_organization_invitations",
+    )
+    accepted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="accepted_organization_invitations",
+    )
+    revoked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="revoked_organization_invitations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "id"]
+        indexes = [models.Index(fields=["organization", "status", "created_at"])]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "email"],
+                condition=models.Q(status="pending"),
+                name="unique_pending_org_invitation_email",
+            ),
+        ]
+
+    def effective_status(self, *, now=None):
+        now = now or timezone.now()
+        if self.status == self.Status.PENDING and self.expires_at <= now:
+            return self.Status.EXPIRED
+        return self.status
+
+    def __str__(self):
+        return f"{self.email} — {self.organization} ({self.status})"
+
+
 class SupportAccess(models.Model):
     """A time-limited grant for read-only support access to one organization."""
 

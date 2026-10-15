@@ -27,7 +27,8 @@ These are starting profiles, not substitutes for organization-scoped policy. Eac
 ### Company, membership and authorization
 
 - Owner creates a company, legal entity, currency/time-zone preferences, and initial users.
-- An invitation binds to the intended organization and role after acceptance.
+- An owner or admin invites a user to an organization with a role bounded by the inviter's authority. Invitation links are single-use, expire after seven days, and can be revoked. Email delivery and mailbox ownership verification are not provided.
+- Invitation acceptance creates an account with a validated password or joins a matching existing account, then adds the member only to the invited organization. Caller input cannot change the target organization or role.
 - A user cannot view or mutate another organization’s records through pages, APIs, search, exports, files, jobs or guessed identifiers.
 - Employee access to HR records is limited to permitted personal records; confidential HR and salary fields require explicit permission.
 - Sensitive changes record actor, organization, object, time and action.
@@ -83,7 +84,7 @@ These are starting profiles, not substitutes for organization-scoped policy. Eac
 
 - Authorized HR/owner user maintains employee, department and employment-status records.
 - In the current internal alpha, owner/admin/operations users can create and update a minimal organization-scoped employee directory profile (display name, job title, department and active status); employees can read active profiles. The directory does not expose personal email, salary, payroll, government identifiers or home addresses, and a profile does not grant account access.
-- Directory profiles are linked to existing organization membership. Only active member accounts appear; managers can review inactive profiles. This profile increment does not implement employee invitations, leave balances or employment-contract records.
+- Directory profiles are linked to existing organization membership. Only active member accounts appear; managers can review inactive profiles. The invite workflow does not add leave balances or employment-contract records.
 - Organization members submit and track their own leave requests; owners, admins, and operations managers review requests from other members. Requests have inclusive dates, a category, an optional short note, and a recorded approval/rejection/cancellation history. The requester can cancel a pending request; rejection requires a reason; managers cannot approve or reject their own requests. Overlapping pending/approved requests are blocked. Notes must not include medical details or other sensitive information.
 - Leave categories are labels only. The current workflow does not calculate leave balances, accrual, paid/unpaid entitlement, carryover, public holidays, or statutory rules; it also does not implement payroll, calendar integration, or notifications. See [Employee leave requests](EMPLOYEE_LEAVE_REQUESTS.md).
 - Employees see only allowed personal profile and leave information.

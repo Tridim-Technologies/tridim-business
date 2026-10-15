@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import EmployeeDirectory from './EmployeeDirectory'
 import LeaveRequests from './LeaveRequests'
+import OrganizationInvitations from './OrganizationInvitations'
+import InvitationAcceptance from './InvitationAcceptance'
 
 type Organization = { id: string; name: string; role: string }
 type Customer = { id: number; name: string; contact_name: string; email: string; phone: string; status: 'active' | 'archived'; status_history: { previous_status: string; status: string; actor: string; created_at: string }[] }
@@ -56,7 +58,7 @@ type DarajaAttempt = {
   checkout_request_id: string | null; payment: string | null; result_code: string; result_description: string
   created_at: string; updated_at: string
 }
-type Session = { authenticated: boolean; user?: { id: number; username: string }; organizations?: Organization[] }
+type Session = { authenticated: boolean; user?: { id: number; username: string; email: string }; organizations?: Organization[] }
 
 function dateInputValue(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -121,7 +123,8 @@ export default function App() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null)
   const [quoteLines, setQuoteLines] = useState([{ description: '', quantity: '1', unit_price: '' }])
-  const [page, setPage] = useState<'customers' | 'quotations' | 'jobs' | 'expenses' | 'invoices' | 'employees' | 'leave'>('customers')
+  const [page, setPage] = useState<'customers' | 'quotations' | 'jobs' | 'expenses' | 'invoices' | 'employees' | 'leave' | 'invitations'>('customers')
+  const [invitationToken, setInvitationToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('invite') || '')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -140,6 +143,7 @@ export default function App() {
   const canManageEmployees = ['owner', 'admin', 'operations'].includes(activeOrg?.role || '')
   const canManageLeave = canManageEmployees
   const canViewLeave = ['owner', 'admin', 'sales', 'operations', 'finance', 'employee'].includes(activeOrg?.role || '')
+  const canManageInvitations = ['owner', 'admin'].includes(activeOrg?.role || '')
 
   const refreshData = useCallback(async () => {
     if (!organization) return
@@ -168,6 +172,11 @@ export default function App() {
   }, [organization, customerStatus, customerSearch, canViewInvoices, canViewTimeEntries])
 
   useEffect(() => { refreshSession().catch((reason: Error) => setError(reason.message)).finally(() => setLoading(false)) }, [])
+  useEffect(() => {
+    const readInvitationToken = () => setInvitationToken(new URLSearchParams(window.location.hash.slice(1)).get('invite') || '')
+    window.addEventListener('hashchange', readInvitationToken)
+    return () => window.removeEventListener('hashchange', readInvitationToken)
+  }, [])
   useEffect(() => {
     if (!session?.authenticated || !organization) { setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setExpenseClaims([]); setInvoices([]); setDarajaAttempts({}); return }
     refreshData().catch((reason: Error) => setError(reason.message))
@@ -512,7 +521,15 @@ export default function App() {
     setSession({ authenticated: false }); setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setExpenseClaims([]); setInvoices([]); setPayments([]); setDarajaAttempts({}); setFinanceCustomers([])
   }
 
+  async function completeInvitation(organizationId?: string) {
+    setInvitationToken('')
+    await refreshSession()
+    if (organizationId) setOrganization(organizationId)
+    setPage('customers')
+  }
+
   if (loading) return <main className="loading">Loading your workspace…</main>
+  if (invitationToken) return <InvitationAcceptance token={invitationToken} session={session} onComplete={completeInvitation} />
   if (!session?.authenticated) return <main className="login-shell"><section className="login-card">
     <div className="brand-mark">T</div><p className="eyebrow">TRIDIM BUSINESS</p><h1>One clear view of your work.</h1>
     <p className="muted">Sign in to manage your organization’s customers and quotations.</p>{error && <div className="alert">{error}</div>}
@@ -525,7 +542,7 @@ export default function App() {
   const canManageCustomers = ['owner', 'admin', 'sales', 'operations'].includes(activeOrg?.role || '')
   const canManageJobs = ['owner', 'admin', 'operations'].includes(activeOrg?.role || '')
   const canWriteJobNotes = canManageJobs || activeOrg?.role === 'employee'
-  const label = page === 'leave' ? 'Leave requests' : page === 'employees' ? 'Employees' : page === 'jobs' ? 'Jobs' : page === 'expenses' ? 'Expenses' : page === 'quotations' ? 'Quotations' : page === 'invoices' ? 'Invoices' : 'Customers'
+  const label = page === 'invitations' ? 'Invitations' : page === 'leave' ? 'Leave requests' : page === 'employees' ? 'Employees' : page === 'jobs' ? 'Jobs' : page === 'expenses' ? 'Expenses' : page === 'quotations' ? 'Quotations' : page === 'invoices' ? 'Invoices' : 'Customers'
   const visibleQuotes = quotations
   const availableExpenseJobs = jobs.filter((job) => job.status !== 'cancelled' && job.assignments.some((assignment) => assignment.user === session.user?.username && !assignment.unassigned_at))
   return <div className="app-shell">
@@ -538,13 +555,14 @@ export default function App() {
         <button className={`nav-item ${page === 'expenses' ? 'active' : ''}`} onClick={() => setPage('expenses')}><span className="nav-icon">◇</span> Expenses</button>
         {canViewEmployees && <button className={`nav-item ${page === 'employees' ? 'active' : ''}`} onClick={() => setPage('employees')}><span className="nav-icon">♙</span> Employees</button>}
         {canViewLeave && <button className={`nav-item ${page === 'leave' ? 'active' : ''}`} onClick={() => setPage('leave')}><span className="nav-icon">◷</span> Leave</button>}
+        {canManageInvitations && <button className={`nav-item ${page === 'invitations' ? 'active' : ''}`} onClick={() => setPage('invitations')}><span className="nav-icon">✉</span> Invitations</button>}
         {canViewInvoices && <button className={`nav-item ${page === 'invoices' ? 'active' : ''}`} onClick={() => setPage('invoices')}><span className="nav-icon">▤</span> Invoices</button>}
       </nav>
       <div className="sidebar-bottom"><span className="avatar">{session.user?.username.slice(0, 1).toUpperCase()}</span><div className="user-label"><strong>{session.user?.username}</strong><small>{activeOrg?.role || 'Member'}</small></div><button className="icon-button" onClick={signOut} aria-label="Sign out">↗</button></div>
     </aside>
     <main className="main-area"><header className="topbar"><div><span className="breadcrumb">Workspace</span><span className="slash">/</span> {label}</div><div className="top-actions"><select aria-label="Organization" value={organization} onChange={(event) => { setPage('customers'); setOrganization(event.target.value); setCustomers([]); setQuotations([]); setJobs([]); setTimeEntries({}); setExpenseClaims([]); setInvoices([]) }}>{session.organizations?.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}</select><span className="avatar small">{session.user?.username.slice(0, 1).toUpperCase()}</span></div></header>
       <div className="content">
-        {page === 'leave' ? <LeaveRequests organization={organization} canManage={canManageLeave} saving={saving} setSaving={setSaving} error={error} setError={setError} /> : page === 'employees' ? <EmployeeDirectory organization={organization} canManage={canManageEmployees} saving={saving} setSaving={setSaving} error={error} setError={setError} /> : page === 'customers' ? <>
+        {page === 'invitations' ? <OrganizationInvitations organization={organization} canInviteAdmin={activeOrg?.role === 'owner'} saving={saving} setSaving={setSaving} error={error} setError={setError} /> : page === 'leave' ? <LeaveRequests organization={organization} canManage={canManageLeave} saving={saving} setSaving={setSaving} error={error} setError={setError} /> : page === 'employees' ? <EmployeeDirectory organization={organization} canManage={canManageEmployees} saving={saving} setSaving={setSaving} error={error} setError={setError} /> : page === 'customers' ? <>
           <div className="page-heading"><div><p className="eyebrow">RELATIONSHIPS</p><h1>Customers</h1><p className="muted">Keep the people and businesses you work with in one place.</p></div><span className="count-pill">{customers.length} {customers.length === 1 ? 'customer' : 'customers'}</span></div>
           {error && <div className="alert inline-alert">{error}</div>}
           <div className="content-grid"><section className="panel customer-panel"><div className="panel-heading"><div><h2>Customer directory</h2><p>Records for {activeOrg?.name || 'your organization'}</p></div></div>
