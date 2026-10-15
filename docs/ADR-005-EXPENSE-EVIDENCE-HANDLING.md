@@ -1,6 +1,6 @@
 # ADR-005: Private expense evidence handling and lifecycle
 
-**Status:** Accepted as a provider-neutral product and security design; implementation is gated on the open decisions below
+**Status:** Accepted as the provider-neutral product and security design. A synthetic-only local development path is implemented behind a disabled-by-default gate; real-data use remains gated on the open decisions below.
 
 **Date:** 14 October 2026
 
@@ -62,6 +62,12 @@ Advanced configurable policies, automated audit selection, OCR, and integrations
 - Preserving immutable submitted versions improves reviewability but uses more storage and makes retention policy and deletion execution essential.
 - Per-organization evidence requirements can fit different workflows, but the initial version should expose only a small number of understandable policy choices.
 - The exact privacy, tax, accounting, and record-retention obligations differ by jurisdiction and customer. This ADR is a technical/product design, not legal advice or a compliance certification.
+
+## Synthetic development implementation status
+
+The core application includes an opt-in development-only path (`DEBUG=1` and `EXPENSE_EVIDENCE_ENABLED=1`) using an ignored local private directory and a local ClamAV Unix socket. It validates the initial formats and size limits, quarantines uploads until a clean scan, checks tenant/claim/role access on list/download/delete, stores a digest and detected media type, preserves submitted-version evidence, audits access and scan outcomes, and provides bounded cleanup for stale quarantine/rejections and deleted-object retries. The setting cannot enable this path when `DEBUG=0`.
+
+This implementation does not establish a production-safe parser isolation boundary, select production object storage or scanning infrastructure, set customer retention schedules, purge accepted evidence on retention expiry, define backup reconciliation, or assign support/monitoring/incident ownership. Keep the feature disabled outside local synthetic development. A clean local scan is not approval to handle real expense evidence.
 
 ## Open decisions before implementation or real-data use
 

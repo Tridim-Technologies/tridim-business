@@ -9,6 +9,8 @@ dependencies = [
     "dj-database-url>=2.3,<3",
     "psycopg[binary]>=3.2,<4",
     "mpesa-sdk>=1.1.0,<2",
+    "pillow>=11,<13",
+    "pypdf>=5,<7",
 ]
 
 [dependency-groups]

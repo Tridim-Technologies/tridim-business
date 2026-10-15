@@ -26,6 +26,10 @@ from quotations.expense_views import (
     expense_claim_transition_view,
     expense_claims_view,
 )
+from quotations.evidence_views import (
+    expense_claim_evidence_detail_view,
+    expense_claim_evidence_view,
+)
 from invoicing.views import (
     finance_export_view,
     daraja_payment_attempt_create_view,
@@ -147,6 +151,16 @@ urlpatterns = [
         "api/organizations/<uuid:organization_id>/expense-claims/<int:claim_id>/transition/",
         expense_claim_transition_view,
         name="expense-claim-transition",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/expense-claims/<int:claim_id>/evidence/",
+        expense_claim_evidence_view,
+        name="expense-claim-evidence",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/expense-claims/<int:claim_id>/evidence/<uuid:evidence_id>/",
+        expense_claim_evidence_detail_view,
+        name="expense-claim-evidence-detail",
     ),
     path(
         "api/organizations/<uuid:organization_id>/invoices/",

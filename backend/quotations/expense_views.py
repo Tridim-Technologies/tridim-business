@@ -16,7 +16,13 @@ from .expense_serializers import (
     ExpenseClaimWriteSerializer,
 )
 from .job_views import JOB_MANAGERS, _membership
-from .models import ExpenseClaim, ExpenseClaimHistory, Job, JobAssignment
+from .models import (
+    ExpenseClaim,
+    ExpenseClaimEvidence,
+    ExpenseClaimHistory,
+    Job,
+    JobAssignment,
+)
 
 
 def _payload(request):
@@ -47,7 +53,7 @@ def _claim_query(organization_id, membership, user):
         )
     elif membership.role not in JOB_MANAGERS:
         claims = claims.filter(claimant=user)
-    return claims.prefetch_related("history__actor")
+    return claims.prefetch_related("history__actor", "evidence")
 
 
 def _serialize(claim, membership, user):
@@ -266,7 +272,13 @@ def expense_claim_transition_view(request, organization_id, claim_id):
                 return JsonResponse(
                     {"detail": "A current job assignment is required."}, status=409
                 )
-            if not claim.missing_receipt_explanation:
+            if (
+                not claim.missing_receipt_explanation
+                and not claim.evidence.filter(
+                    state=ExpenseClaimEvidence.State.ACCEPTED,
+                    claim_version=claim.version,
+                ).exists()
+            ):
                 return JsonResponse(
                     {
                         "missing_receipt_explanation": [
@@ -282,12 +294,24 @@ def expense_claim_transition_view(request, organization_id, claim_id):
                     {"detail": "Only returned claims can be resubmitted."}, status=409
                 )
             last_event = claim.history.last()
-            if last_event is None or last_event.action != "edit":
+            has_next_version_evidence = claim.evidence.filter(
+                state=ExpenseClaimEvidence.State.ACCEPTED,
+                claim_version=claim.version + 1,
+            ).exists()
+            if (
+                last_event is None or last_event.action != "edit"
+            ) and not has_next_version_evidence:
                 return JsonResponse(
                     {"detail": "Correct the returned claim before resubmitting."},
                     status=409,
                 )
-            if not claim.missing_receipt_explanation:
+            if (
+                not claim.missing_receipt_explanation
+                and not claim.evidence.filter(
+                    state=ExpenseClaimEvidence.State.ACCEPTED,
+                    claim_version=claim.version + 1,
+                ).exists()
+            ):
                 return JsonResponse(
                     {
                         "missing_receipt_explanation": [
@@ -322,6 +346,16 @@ def expense_claim_transition_view(request, organization_id, claim_id):
                     return JsonResponse(
                         {"detail": "This version is already waived."}, status=409
                     )
+                if claim.evidence.filter(
+                    state=ExpenseClaimEvidence.State.ACCEPTED,
+                    claim_version=claim.version,
+                ).exists():
+                    return JsonResponse(
+                        {
+                            "detail": "A receipt is attached; a waiver is not applicable."
+                        },
+                        status=409,
+                    )
                 if not claim.missing_receipt_explanation:
                     return JsonResponse(
                         {"detail": "The claimant must explain the missing receipt."},
@@ -329,9 +363,15 @@ def expense_claim_transition_view(request, organization_id, claim_id):
                     )
                 claim.waived_version = claim.version
             elif action == "approve":
-                if claim.waived_version != claim.version:
+                has_evidence = claim.evidence.filter(
+                    state=ExpenseClaimEvidence.State.ACCEPTED,
+                    claim_version=claim.version,
+                ).exists()
+                if claim.waived_version != claim.version and not has_evidence:
                     return JsonResponse(
-                        {"detail": "A current-version receipt waiver is required."},
+                        {
+                            "detail": "Current-version receipt evidence or a reasoned waiver is required."
+                        },
                         status=409,
                     )
                 claim.status = ExpenseClaim.Status.APPROVED

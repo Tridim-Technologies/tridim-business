@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 venv/
 *.sqlite3
+.private-evidence/
 .pytest_cache/
 .mypy_cache/
 
