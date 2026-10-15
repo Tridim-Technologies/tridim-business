@@ -2,6 +2,28 @@
 
 <!-- version list -->
 
+## v0.15.0 (2026-10-15)
+
+### Documentation
+
+- **expenses**: Document local scanner setup
+  ([#64](https://github.com/Tridim-Technologies/tridim-business/pull/64),
+  [`16f01c1`](https://github.com/Tridim-Technologies/tridim-business/commit/16f01c1ad9a53e3cbecf9e3a4fff72e0d11a44bf))
+
+- **ops**: Consolidate alpha readiness review
+  ([#68](https://github.com/Tridim-Technologies/tridim-business/pull/68),
+  [`8fda4ee`](https://github.com/Tridim-Technologies/tridim-business/commit/8fda4ee8ad229152db8ee9b07b6c9fac98e69ecc))
+
+- **ops**: Record internal alpha recovery baseline
+  ([#66](https://github.com/Tridim-Technologies/tridim-business/pull/66),
+  [`f741370`](https://github.com/Tridim-Technologies/tridim-business/commit/f7413703b06e652ef4aeaf75566cd9648cce5f2a))
+
+### Features
+
+- **accounts**: Audit platform-superuser tenant reads
+  ([`0ffb7ad`](https://github.com/Tridim-Technologies/tridim-business/commit/0ffb7ad36235b9c19fb89dc88d41bcd3d906a6ca))
+
+
 ## v0.14.0 (2026-10-15)
 
 ### Features
