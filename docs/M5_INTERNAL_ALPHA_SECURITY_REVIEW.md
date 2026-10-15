@@ -1,10 +1,27 @@
-# M5 Internal Alpha Security Review — API and exports
+# M5 Internal Alpha Readiness Review
 
-**Status:** Scoped code review completed; review findings fixed or tracked below
-**Reviewed:** 8 October 2026
-**Scope:** Session and organization APIs, customer and quotation APIs, job APIs, invoice/payment APIs, finance CSV exports, and sensitive logging.
+**Status:** Documentation and local synthetic readiness review completed; hosted and ownership-dependent gates remain open
+**Reviewed:** 15 October 2026
+**Scope:** Tenant and role boundaries, support access, endpoint abuse controls, synthetic expense evidence, database recovery, monitoring, incident ownership, and sensitive logging.
 
-This is an implementation review with regression tests, not an independent penetration test or production security certification.
+This review reconciles current implementation notes, existing regression coverage, and the local synthetic workflows. It is not an independent penetration test, legal review, production security certification, or hosted-operations rehearsal.
+
+## Readiness summary
+
+| Area | Current status | Evidence and limitation |
+|---|---|---|
+| Tenant and role boundaries | **Implemented and covered by local regression tests** | Organization-scoped APIs and finance exports enforce role checks; see [issue #36](https://github.com/Tridim-Technologies/tridim-business/issues/36). No independent penetration test has been performed. |
+| Scoped Django Admin support | **Implemented and covered by local regression tests** | Non-superuser staff access requires a time-limited, purpose-bearing organization/data-scope grant; list/detail reads are audited. Platform superusers bypass the grant/audit stream, so their data reads remain a known privileged-access risk; see [Admin Support Access](ADMIN_SUPPORT_ACCESS.md) and [issue #37](https://github.com/Tridim-Technologies/tridim-business/issues/37). |
+| Login/callback abuse controls | **Implemented; required operations are not scheduled/configured** | Shared database counters, bounded payloads, and short-lived unmatched callback retention are implemented. `cleanup_abuse_records` must be scheduled at least every five minutes. Proxy address handling is only meaningful when a future trusted proxy sets `REMOTE_ADDR` correctly; see [Endpoint Abuse Controls](ENDPOINT_ABUSE_CONTROLS.md) and [issue #38](https://github.com/Tridim-Technologies/tridim-business/issues/38). |
+| Expense evidence | **Local synthetic path only** | Development-only upload, validation, quarantine, ClamAV scanning, private local storage, scoped access, and cleanup are implemented and were exercised with generated files. Real evidence remains disabled outside local synthetic development; production storage and parser/scanner isolation, access audit review, retention/deletion, and backup reconciliation are not established. See [ADR-005](ADR-005-EXPENSE-EVIDENCE-HANDLING.md). |
+| Database recovery | **Local synthetic rehearsal passed; hosted recovery unverified** | PostgreSQL 16 logical backup/restore rehearsal passed locally on 15 October 2026. The chosen internal-alpha planning baseline is RPO up to 24 hours, RTO by the next business day, and a seven-day recovery window; these are not customer commitments and have not been configured or measured in a hosted environment. See [Database Backup and Restore](DATABASE_BACKUP_AND_RESTORE.md) and [issue #65](https://github.com/Tridim-Technologies/tridim-business/issues/65). |
+| Monitoring and incident response | **Runbook exists; operations are not configured** | Cloud Monitoring and Cloud Logging are the preferred future direction, but there is no configured project, telemetry retention, alert route, named service/technical owner, privacy/security escalation contact, or coverage schedule. See [Monitoring and Incident Response](MONITORING_AND_INCIDENT_RESPONSE.md). |
+
+### Readiness boundary
+
+The verified evidence supports continued **local synthetic development**. It does not authorize real business data, real expense evidence, customer field evaluation, or hosted deployment. Before any real-data evaluation, the project still needs assigned accountable owners and support coverage; a tested alert and incident contact path; scheduled cleanup and correct proxy behavior in the selected environment; production evidence storage/scanning isolation and customer-specific retention/deletion; backup reconciliation for evidence objects; and a scoped, approved evaluation and data-exit plan. Do not treat the planning RPO/RTO/window as service guarantees.
+
+No operator, privacy reviewer, alert destination, region, project, or budget is assigned by this review. Those require explicit decisions and remain outside this local documentation review.
 
 ## Review results
 
