@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.14.0 (2026-10-15)
+
+### Features
+
+- **expenses**: Add gated private evidence uploads
+  ([`1daba3c`](https://github.com/Tridim-Technologies/tridim-business/commit/1daba3cb68fe5ae13454fccb2f33576731d53d3f))
+
+
 ## v0.13.0 (2026-10-14)
 
 ### Features
