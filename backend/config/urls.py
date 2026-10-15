@@ -7,6 +7,12 @@ from hr.leave_views import (
     leave_request_transition_view,
     leave_requests_view,
 )
+from accounts.invitation_views import (
+    invitation_accept_view,
+    invitation_inspect_view,
+    organization_invitation_revoke_view,
+    organization_invitations_view,
+)
 
 from accounts.views import csrf_token, session_view, organizations_view
 from customers.views import customer_detail_view, customers_view
@@ -56,6 +62,20 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/csrf/", csrf_token),
     path("api/session/", session_view),
+    path(
+        "api/invitations/inspect/", invitation_inspect_view, name="invitation-inspect"
+    ),
+    path("api/invitations/accept/", invitation_accept_view, name="invitation-accept"),
+    path(
+        "api/organizations/<uuid:organization_id>/invitations/",
+        organization_invitations_view,
+        name="organization-invitations",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/invitations/<int:invitation_id>/revoke/",
+        organization_invitation_revoke_view,
+        name="organization-invitation-revoke",
+    ),
     path(
         "api/payments/daraja/sandbox/stk/callback/",
         daraja_stk_callback_view,

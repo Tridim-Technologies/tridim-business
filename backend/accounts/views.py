@@ -51,6 +51,7 @@ def session_view(request):
                 "user": {
                     "id": request.user.pk,
                     "username": request.user.get_username(),
+                    "email": request.user.email,
                 },
                 "organizations": _organizations(request.user),
             }
@@ -111,7 +112,11 @@ def session_view(request):
         return JsonResponse(
             {
                 "authenticated": True,
-                "user": {"id": user.pk, "username": user.get_username()},
+                "user": {
+                    "id": user.pk,
+                    "username": user.get_username(),
+                    "email": user.email,
+                },
                 "organizations": _organizations(user),
             }
         )
