@@ -1,24 +1,31 @@
 # PostgreSQL backup and restore runbook
 
-**Status:** Local synthetic-data rehearsal verified; hosted recovery settings and service targets remain undecided.
+**Status:** Local synthetic-data rehearsal verified. Internal-alpha recovery targets are selected as planning assumptions; hosted recovery settings remain unconfigured.
 
-This runbook describes how to protect and recover the Tridim Business Platform PostgreSQL database. The project recommends Cloud SQL for PostgreSQL for an initial hosted deployment, but has not selected a project, region, database size, recovery objectives, retention period, or operating owner. This document does not claim production readiness or establish an RPO/RTO.
+This runbook describes how to protect and recover the Tridim Business Platform PostgreSQL database. Hosted deployment remains deferred. The internal-alpha targets below guide planning only; they are not customer commitments, hosted configuration, or evidence of production readiness.
 
-## Recovery decisions required before real data
+## Internal-alpha planning baseline and hosted decisions
 
-Record and approve these values for each deployed environment before it stores real business records:
+The selected internal-alpha planning baseline is:
+
+| Target | Planning baseline | Current evidence |
+| --- | --- | --- |
+| Recovery point objective (RPO) | Up to 24 hours | Not configured or measured in a hosted environment |
+| Recovery time objective (RTO) | By the next business day | Not measured against a hosted deployment or production-scale data |
+| Recovery window | Seven days | Planning assumption only; hosted backup/PITR retention is not configured |
+
+These targets apply to internal-alpha planning, not customer-facing service guarantees. Before any real-data evaluation, confirm that the selected deployment, backup policy, operator coverage, and restore rehearsal can meet them. Hosted recovery settings and an accountable operator still require assignment:
 
 | Decision | Current state |
 | --- | --- |
-| Database/project and region | Not selected; see [ADR-004](ADR-004-HOSTING-AND-PAYMENT-ACCOUNTS.md) |
-| Recovery point objective (RPO) | Not set; choose based on acceptable data loss and provider configuration |
-| Recovery time objective (RTO) | Not set; rehearse against the selected deployment and measured data volume |
-| Backup/PITR retention | Not set; choose to satisfy recovery, legal, and cost requirements |
+| Database/project and region | Not selected; hosted deployment is deferred; see [ADR-004](ADR-004-HOSTING-AND-PAYMENT-ACCOUNTS.md) |
+| Hosted RPO/RTO configuration and measured performance | Not configured or verified |
+| Hosted backup/PITR retention | Not configured; validate whether it can support the seven-day planning window |
 | Backup and restore operator | Not assigned |
 | Alert owner and escalation path | Not assigned |
 | Backup encryption and key/access policy | Must be confirmed for the chosen storage and deployment |
 
-Do not substitute vendor defaults for an explicit product recovery target. Revisit these decisions if the data location, database edition, or deployment design changes.
+Do not substitute vendor defaults for these targets. Revisit the planning baseline if the data location, database edition, or deployment design changes.
 
 ## Backup requirements
 
@@ -87,8 +94,8 @@ The script creates a temporary PostgreSQL cluster bound to `127.0.0.1` on a sele
 
 ### Rehearsal evidence
 
-On 9 October 2026, the script passed locally with PostgreSQL 16. It verified one synthetic organization, customer, invoice, payment, and allocation after restoring the archive; Django system checks and migration-state checks passed. The temporary database cluster and dump were removed by the script. This verifies the project schema and a logical dump/restore workflow on one local PostgreSQL installation only. It does not test Cloud SQL backups/PITR, encrypted remote storage, monitoring/alerting, production data volume, or a deployment cutover.
+On 15 October 2026, the script passed locally with PostgreSQL 16. It verified one synthetic organization, customer, invoice, payment, and allocation after restoring the archive; Django system checks and migration-state checks passed. The temporary database cluster and dump were removed by the script. This verifies the project schema and a logical dump/restore workflow on one local PostgreSQL installation only. It does not test Cloud SQL backups/PITR, encrypted remote storage, monitoring/alerting, production data volume, or a deployment cutover.
 
 ## Operational ownership and status
 
-The recovery operator, alert recipient, RPO, RTO, retention, region, and hosted backup policy remain unassigned or unset. Assign them before any real-data evaluation. Rehearse a restore after material schema/deployment changes and at the cadence selected by the responsible operator; a backup is not considered verified until restore evidence exists.
+The planning targets are recorded above, but hosted implementation, measured RPO/RTO, actual retention, region, and an operating owner remain unset. Assign owners and verify the selected deployment against the baseline before any real-data evaluation. Rehearse a restore after material schema/deployment changes and at the cadence selected by the responsible operator; a backup is not considered verified until restore evidence exists.

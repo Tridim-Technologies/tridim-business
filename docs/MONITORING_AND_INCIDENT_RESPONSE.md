@@ -15,7 +15,7 @@ Both endpoints are unauthenticated and disclose no dependency details. Restrict 
 
 ## Minimum signals to configure
 
-Select a monitoring provider and tune thresholds after observing the deployed service. Start with these signals:
+Cloud Monitoring and Cloud Logging are the preferred future monitoring direction. Neither is configured for this project. Tune thresholds after observing a deployed service, and start with these signals:
 
 | Signal | What to alert on | Initial response |
 |---|---|---|
@@ -61,9 +61,11 @@ Complete these fields before any real customer data or field evaluation:
 | Privacy/security escalation contact | **TBD — assign a reviewer and escalation path** |
 | Alert destination and access list | **TBD — choose a monitored private channel and test delivery** |
 | Hosting provider, project, and region | **TBD — see [ADR-004](ADR-004-HOSTING-AND-PAYMENT-ACCOUNTS.md)** |
-| Monitoring/logging provider and retention | **TBD — select, configure, and review access/retention** |
+| Monitoring/logging direction | **Cloud Monitoring and Cloud Logging preferred; no project or services configured** |
+| Telemetry retention and access policy | **TBD — review and configure before evaluation** |
 | Alert thresholds and service objectives | **TBD — baseline first; approve targets before field evaluation** |
-| RPO, RTO, backup retention, and hosted PITR | **TBD — define and verify against the selected hosting service** |
+| Internal-alpha recovery planning targets | **Selected: RPO up to 24 hours, RTO by next business day, seven-day recovery window; not customer commitments** |
+| Hosted recovery configuration and verification | **TBD — not configured; see [Database Backup and Restore](DATABASE_BACKUP_AND_RESTORE.md)** |
 | Daraja production approval and support | **Not enabled — sandbox only; live use requires separate readiness and provider approval** |
 
 Keep the owner list and alert tests current. After each incident or deployment change, verify that the contact path still works. Support access to application data must follow [Admin Support Access](ADMIN_SUPPORT_ACCESS.md).
