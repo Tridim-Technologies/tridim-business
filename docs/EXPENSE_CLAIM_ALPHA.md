@@ -18,7 +18,64 @@ Claimants retain their own claim history after job unassignment while they remai
 
 ## Local synthetic receipt evidence
 
-The evidence route is available only when Django is running with `DEBUG=1` and `EXPENSE_EVIDENCE_ENABLED=1`. Keep it disabled for normal work. It uses a private local directory outside static/media serving, defaulting to `.private-evidence/` in the repository root, and a local ClamAV daemon exposed through a Unix socket. Set `EXPENSE_EVIDENCE_CLAMD_SOCKET` to that socket path. The application does not install or start ClamAV. If the scanner is not configured, times out, or returns an invalid result, the upload stays quarantined and cannot be downloaded.
+The local walkthrough uses these tools:
+
+- The **official ClamAV universal macOS package** installs the scanner on Intel and Apple Silicon. **Homebrew** is an alternative package manager.
+- **ClamAV** provides `freshclam` to download/update malware definitions and `clamd` to scan uploads over a Unix socket.
+- **GnuPG (`gpg`)** verifies the downloaded package signature; macOS's built-in `installer` installs the verified PKG.
+- **uv + Python 3.12** run the Django backend; **Node.js + npm/Vite** run the React frontend. The project README lists the supported development versions and start commands.
+
+See the [official ClamAV macOS installation instructions](https://docs.clamav.net/manual/Installing.html#macos), [release downloads](https://www.clamav.net/download.html), and the [ClamAV configuration guide](https://docs.clamav.net/manual/Usage/Configuration.html) for installation-specific details.
+
+The evidence route is available only when Django is running with `DEBUG=1` and `EXPENSE_EVIDENCE_ENABLED=1`. Keep it disabled for normal work. It uses a private local directory outside static/media serving, defaulting to `.private-evidence/` in the repository root, and a local ClamAV daemon exposed through a Unix socket. Set `EXPENSE_EVIDENCE_CLAMD_SOCKET` to that socket path. The application does not install or start ClamAV.
+
+### macOS developer setup
+
+Download the current **macOS universal PKG**, its matching `.sig` file, and the Cisco Talos public key linked from the official ClamAV download page. Verify the package signature before installing. The PKG installs under `/usr/local/clamav`; macOS will request administrator authentication for installation. It includes sample configuration files, but does not configure the scanner or database for you.
+
+```sh
+gpg --import cisco-talos.gpg
+gpg --verify clamav-X.Y.Z.macos.universal.pkg.sig clamav-X.Y.Z.macos.universal.pkg
+sudo installer -pkg clamav-X.Y.Z.macos.universal.pkg -target /
+export PATH="/usr/local/clamav/bin:/usr/local/clamav/sbin:$PATH"
+CLAMAV_ETC="$HOME/.config/clamav"
+CLAMAV_DATA="$HOME/.local/share/clamav"
+CLAMAV_RUN="$HOME/.local/run/clamav"
+mkdir -p "$CLAMAV_ETC" "$CLAMAV_DATA" "$CLAMAV_RUN"
+chmod 700 "$CLAMAV_ETC" "$CLAMAV_DATA" "$CLAMAV_RUN"
+cp /usr/local/clamav/etc/freshclam.conf.sample "$CLAMAV_ETC/freshclam.conf"
+cp /usr/local/clamav/etc/clamd.conf.sample "$CLAMAV_ETC/clamd.conf"
+```
+
+In both configuration files, remove or comment out the `Example` line. In both files, set `DatabaseDirectory` to the absolute path in `$CLAMAV_DATA`. In `clamd.conf`, set `LocalSocket` to the absolute path in `$CLAMAV_RUN` followed by `/clamd.sock`, and set `LocalSocketMode 600`. Download definitions, then start ClamAV in a terminal:
+
+```sh
+freshclam --config-file "$CLAMAV_ETC/freshclam.conf"
+clamd --config-file "$CLAMAV_ETC/clamd.conf" --foreground
+```
+
+In a second terminal, set the same `CLAMAV_RUN` path and start the backend with the local feature gate and socket path. Leave `DJANGO_DEBUG=1` and `DJANGO_ALLOWED_HOSTS` restricted to `localhost,127.0.0.1` (the development defaults). Do not put secrets or real receipt data in this walkthrough.
+
+```sh
+CLAMAV_RUN="$HOME/.local/run/clamav"
+EXPENSE_EVIDENCE_ENABLED=1 \
+EXPENSE_EVIDENCE_CLAMD_SOCKET="$CLAMAV_RUN/clamd.sock" \
+uv run python backend/manage.py runserver 127.0.0.1:8000
+```
+
+Homebrew is also supported; follow the [official ClamAV package instructions](https://docs.clamav.net/manual/Installing/Packages.html) for its configuration paths. On some macOS/Intel setups, Homebrew builds large dependencies from source and needs substantial temporary disk space, so check `df -h /` first.
+
+In a third terminal, run the frontend:
+
+```sh
+cd frontend
+npm ci
+npm run dev -- --host 127.0.0.1
+```
+
+Use a newly generated JPEG, PNG, or PDF containing synthetic information only. Confirm it appears as accepted, download it as an attachment, then remove it while the claim is still editable. Stop both development servers and `clamd` with Ctrl+C. Without a configured scanner, after a scanner timeout, or after an invalid scan response, the upload stays quarantined and cannot be downloaded.
+
+Use a disposable local database for the walkthrough, and keep its evidence storage under a separate private directory by setting `DATABASE_URL` and `EXPENSE_EVIDENCE_STORAGE_ROOT` for the backend. Do not point this workflow at a database or evidence directory containing real or otherwise valuable local data. After stopping the services, remove only the temporary database and evidence directory you created for the walkthrough; leave your normal development database and `.private-evidence/` directory alone. The `cleanup_expense_evidence` management command separately handles stale quarantined/rejected files and retries deleted-object cleanup.
 
 Only use generated synthetic files. Current limits are 10 MiB per file, five files per claim version, and 25 MiB across a claim. The backend checks the extension, declared MIME type, file signature, image decoding/dimensions, PDF parsing/encryption/page count, and SHA-256 digest. Originals are stored under opaque names with directory mode `0700` and file mode `0600`; download requires a fresh organization/claim/role check and is sent as an attachment with `nosniff`. A draft claimant may remove evidence. Submitted evidence remains attached to its version; evidence added after return belongs to the next version.
 
