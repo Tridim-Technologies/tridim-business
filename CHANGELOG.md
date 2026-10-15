@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.17.0 (2026-10-15)
+
+### Features
+
+- **accounts**: Add organization invitations
+  ([#90](https://github.com/Tridim-Technologies/tridim-business/pull/90),
+  [`22319e0`](https://github.com/Tridim-Technologies/tridim-business/commit/22319e0064234df6e042d4bf31ad074fb8f6959d))
+
+
 ## v0.16.0 (2026-10-15)
 
 ### Chores
