@@ -52,6 +52,8 @@ The expense-evidence upload path is disabled by default. For local synthetic-fil
 
 Product docs live under `docs/`. Security, privacy, tenant separation, auditability and data portability are core requirements.
 
+Dependency updates use committed lockfiles and reviewable pull requests. See [`docs/DEPENDENCY_MAINTENANCE.md`](docs/DEPENDENCY_MAINTENANCE.md) for the update, security-advisory, and validation process.
+
 ## Development checks and releases
 
 Development tooling is managed with [uv](https://docs.astral.sh/uv/) using `pyproject.toml` and the committed `uv.lock` file. Install the locked tools with `uv sync --locked`. Before opening a pull request, run:
