@@ -18,7 +18,13 @@ from quotations.models import (
     QuotationStatusHistory,
 )
 
-from .models import Membership, Organization, SupportAccess, SupportAccessAuditEvent
+from .models import (
+    Membership,
+    Organization,
+    PlatformAdminReadAuditEvent,
+    SupportAccess,
+    SupportAccessAuditEvent,
+)
 
 
 class TenantAdminSupportAccessTests(TestCase):
@@ -238,6 +244,65 @@ class TenantAdminSupportAccessTests(TestCase):
             ).count(),
             2,
         )
+        self.assertTrue(
+            SupportAccessAuditEvent.objects.filter(
+                support_access=self.grant,
+                access_type=SupportAccessAuditEvent.AccessType.LIST,
+            ).exists()
+        )
+
+    def test_superuser_list_and_object_reads_are_audited_without_a_grant(self):
+        self.client.force_login(self.operator)
+
+        list_response = self.client.get(reverse("admin:customers_customer_changelist"))
+        self.assertEqual(list_response.status_code, 200)
+        list_event = PlatformAdminReadAuditEvent.objects.get(
+            actor=self.operator,
+            model_label="customers.customer",
+            access_type=PlatformAdminReadAuditEvent.AccessType.LIST,
+        )
+        self.assertIsNone(list_event.organization_id)
+        self.assertEqual(list_event.object_pk, "")
+
+        detail_response = self.client.get(
+            reverse("admin:customers_customer_change", args=[self.other_customer.pk])
+        )
+        self.assertEqual(detail_response.status_code, 200)
+        detail_event = PlatformAdminReadAuditEvent.objects.get(
+            actor=self.operator,
+            organization=self.other_organization,
+            model_label="customers.customer",
+            object_pk=str(self.other_customer.pk),
+            access_type=PlatformAdminReadAuditEvent.AccessType.OBJECT,
+        )
+        self.assertEqual(detail_event.organization_id, self.other_organization.pk)
+
+    def test_superuser_head_list_read_is_audited(self):
+        self.client.force_login(self.operator)
+
+        response = self.client.head(reverse("admin:customers_customer_changelist"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            PlatformAdminReadAuditEvent.objects.filter(
+                actor=self.operator,
+                model_label="customers.customer",
+                access_type=PlatformAdminReadAuditEvent.AccessType.LIST,
+            ).exists()
+        )
+
+    def test_superuser_read_audit_events_are_read_only(self):
+        request = self.factory.get("/admin/")
+        request.user = self.operator
+        model_admin = admin.site._registry[PlatformAdminReadAuditEvent]
+
+        self.assertTrue(model_admin.has_view_permission(request))
+        request.user = self.support
+        self.assertFalse(model_admin.has_module_permission(request))
+        self.assertFalse(model_admin.has_view_permission(request))
+        self.assertFalse(model_admin.has_add_permission(request))
+        self.assertFalse(model_admin.has_change_permission(request))
+        self.assertFalse(model_admin.has_delete_permission(request))
 
     def test_object_view_audit_is_attributed_to_the_matching_tenant_grant(self):
         other_grant = SupportAccess.objects.create(

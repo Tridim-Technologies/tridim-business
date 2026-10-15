@@ -7,6 +7,7 @@ from django.utils import timezone
 from .models import (
     Membership,
     Organization,
+    PlatformAdminReadAuditEvent,
     SupportAccess,
     SupportAccessAuditEvent,
 )
@@ -192,3 +193,43 @@ class SupportAccessAuditEventAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(PlatformAdminReadAuditEvent)
+class PlatformAdminReadAuditEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "accessed_at",
+        "actor",
+        "organization",
+        "access_type",
+        "model_label",
+        "object_pk",
+    )
+    list_filter = ("organization", "access_type", "model_label", "accessed_at")
+    search_fields = (
+        "actor__username",
+        "organization__name",
+        "model_label",
+        "object_pk",
+    )
+    readonly_fields = tuple(
+        field.name for field in PlatformAdminReadAuditEvent._meta.fields
+    )
+
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("actor", "organization")

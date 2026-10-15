@@ -1,6 +1,10 @@
 from django.contrib import admin
 
-from .models import SupportAccess, SupportAccessAuditEvent
+from .models import (
+    PlatformAdminReadAuditEvent,
+    SupportAccess,
+    SupportAccessAuditEvent,
+)
 
 
 class SupportReadOnlyTabularInline(admin.TabularInline):
@@ -137,14 +141,37 @@ class SupportScopedReadOnlyAdmin(admin.ModelAdmin):
         return super().get_inline_instances(request, obj)
 
     def _audit_access(self, request, obj=None):
-        if request.user.is_superuser or not request.user.is_staff:
+        if request.user.is_superuser:
+            organization_id = None
+            if obj is not None:
+                organization_id = (
+                    self.get_queryset(request)
+                    .filter(pk=obj.pk)
+                    .values_list(self.organization_lookup, flat=True)
+                    .first()
+                )
+                if organization_id is None:
+                    return
+            PlatformAdminReadAuditEvent.objects.create(
+                actor=request.user,
+                organization_id=organization_id,
+                model_label=self.model._meta.label_lower,
+                object_pk=str(obj.pk) if obj is not None else "",
+                access_type=(
+                    PlatformAdminReadAuditEvent.AccessType.OBJECT
+                    if obj is not None
+                    else PlatformAdminReadAuditEvent.AccessType.LIST
+                ),
+            )
+            return
+        if not request.user.is_staff:
             return
         access_type = (
             SupportAccessAuditEvent.AccessType.OBJECT
             if obj is not None
             else SupportAccessAuditEvent.AccessType.LIST
         )
-        grants = self._active_grants(request)
+        organization_id = None
         if obj is not None:
             organization_id = (
                 self.get_queryset(request)
@@ -152,6 +179,11 @@ class SupportScopedReadOnlyAdmin(admin.ModelAdmin):
                 .values_list(self.organization_lookup, flat=True)
                 .first()
             )
+            if organization_id is None:
+                return
+
+        grants = self._active_grants(request)
+        if obj is not None:
             grants = grants.filter(organization_id=organization_id)
         SupportAccessAuditEvent.objects.bulk_create(
             [
@@ -166,11 +198,18 @@ class SupportScopedReadOnlyAdmin(admin.ModelAdmin):
         )
 
     def changelist_view(self, request, extra_context=None):
-        self._audit_access(request)
-        return super().changelist_view(request, extra_context)
+        response = super().changelist_view(request, extra_context)
+        if request.method in {"GET", "HEAD"} and response.status_code == 200:
+            self._audit_access(request)
+        return response
 
     def change_view(self, request, object_id, form_url="", extra_context=None):
         obj = self.get_queryset(request).filter(pk=object_id).first()
-        if obj is not None and request.method in {"GET", "HEAD"}:
+        response = super().change_view(request, object_id, form_url, extra_context)
+        if (
+            obj is not None
+            and request.method in {"GET", "HEAD"}
+            and response.status_code == 200
+        ):
             self._audit_access(request, obj)
-        return super().change_view(request, object_id, form_url, extra_context)
+        return response

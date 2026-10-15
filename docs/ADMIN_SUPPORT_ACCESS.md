@@ -27,7 +27,7 @@ Support staff can view scoped records only. They cannot create, edit, delete, or
 - The support access audit events screen records each scoped list and record view with its timestamp, grant, model, and record identifier. Grant creation and revocation are also recorded in Django's admin history.
 - Audit events are read-only and cannot be deleted through Django Admin.
 
-Platform superusers have the normal global Django Admin privileges and bypass support grants. Reserve those accounts for trusted platform operators; the support-view audit stream does not record superuser reads.
+Platform superusers have the normal global Django Admin privileges and bypass support grants. Successful list and record-detail reads of tenant business models using the support-scoped admin are recorded in a separate platform-admin read audit log, attributed to the superuser. A global list event has no single organization; a record-detail event records the record's organization. Audit events contain access metadata only, not the displayed record contents. The audit log is read-only in Django Admin. This does not audit every Django Admin model or direct database access. Reserve superuser accounts for trusted platform operators.
 
 ## Apply the database migration
 
