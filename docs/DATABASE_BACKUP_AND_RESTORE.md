@@ -14,15 +14,14 @@ The selected internal-alpha planning baseline is:
 | Recovery time objective (RTO) | By the next business day | Not measured against a hosted deployment or production-scale data |
 | Recovery window | Seven days | Planning assumption only; hosted backup/PITR retention is not configured |
 
-These targets apply to internal-alpha planning, not customer-facing service guarantees. Before any real-data evaluation, confirm that the selected deployment, backup policy, operator coverage, and restore rehearsal can meet them. Hosted recovery settings and an accountable operator still require assignment:
+These targets apply to internal-alpha planning, not customer-facing service guarantees. Before any real-data evaluation, confirm that the selected deployment, backup policy, and restore rehearsal can meet them. Hosted recovery settings remain unconfigured:
 
 | Decision | Current state |
 | --- | --- |
 | Database/project and region | Not selected; hosted deployment is deferred; see [ADR-004](ADR-004-HOSTING-AND-PAYMENT-ACCOUNTS.md) |
 | Hosted RPO/RTO configuration and measured performance | Not configured or verified |
 | Hosted backup/PITR retention | Not configured; validate whether it can support the seven-day planning window |
-| Backup and restore operator | Not assigned; see [Monitoring and Incident Response](MONITORING_AND_INCIDENT_RESPONSE.md#ownership-handoff-and-escalation) for role, approval, and backup handoff |
-| Alert owner and escalation path | Not assigned; the monitored route and primary/backup handoff remain TBD |
+| Alert route and delivery verification | Not configured; see [Monitoring and Incident Response](MONITORING_AND_INCIDENT_RESPONSE.md#operational-readiness) |
 | Backup encryption and key/access policy | Must be confirmed for the chosen storage and deployment |
 
 Do not substitute vendor defaults for these targets. Revisit the planning baseline if the data location, database edition, or deployment design changes.
@@ -54,7 +53,7 @@ Provision the password file through the approved secret process; do not paste an
 
 ## Restore procedure
 
-1. Declare the incident using [Monitoring and Incident Response](MONITORING_AND_INCIDENT_RESPONSE.md#ownership-handoff-and-escalation), obtain approval from the accountable business/service owner, assign the recovery operator, stop or control writes as the incident plan requires, and record the suspected recovery point. Do not restore or cut over while the approver or recovery operator is unassigned.
+1. Declare the incident using [Monitoring and Incident Response](MONITORING_AND_INCIDENT_RESPONSE.md#incident-response), stop or control writes as the incident plan requires, and record the suspected recovery point.
 2. Select a known-good managed backup/PITR point or verified logical archive. Preserve the source instance and backup evidence.
 3. Restore into a **new, isolated target** first. Do not use `pg_restore --clean` or restore over the only source copy as the normal rehearsal/recovery path. Cloud SQL PITR creates a new instance; a normal backup restore to an existing instance can overwrite its data. Review the current [Cloud SQL restore overview](https://docs.cloud.google.com/sql/docs/postgres/backup-recovery/restore) and [PITR procedure](https://docs.cloud.google.com/sql/docs/postgres/backup-recovery/pitr) before deployment because provider options can change.
 4. For a logical archive, create an empty target database, inspect the archive, and restore with errors stopping the operation. For example, with target connection values supplied through protected `PG*` settings and `PGPASSFILE`:
@@ -96,6 +95,6 @@ The script creates a temporary PostgreSQL cluster bound to `127.0.0.1` on a sele
 
 On 15 October 2026, the script passed locally with PostgreSQL 16. It verified one synthetic organization, customer, invoice, payment, and allocation after restoring the archive; Django system checks and migration-state checks passed. The temporary database cluster and dump were removed by the script. This verifies the project schema and a logical dump/restore workflow on one local PostgreSQL installation only. It does not test Cloud SQL backups/PITR, encrypted remote storage, monitoring/alerting, production data volume, or a deployment cutover.
 
-## Operational ownership and status
+## Operational readiness and status
 
-The planning targets are recorded above, but hosted implementation, measured RPO/RTO, actual retention, region, and an operating owner remain unset. Assign the recovery operator, restore approver, alert owner, and backups through the [incident ownership handoff](MONITORING_AND_INCIDENT_RESPONSE.md#ownership-handoff-and-escalation), then verify the selected deployment against the baseline before any real-data evaluation. Rehearse a restore after material schema/deployment changes and at the cadence selected by the responsible operator; a backup is not considered verified until restore evidence exists.
+The planning targets are recorded above, but hosted implementation, measured RPO/RTO, actual retention, and region remain unset. Verify the selected deployment against the baseline before any real-data evaluation. Rehearse a restore after material schema/deployment changes and at an appropriate cadence; a backup is not considered verified until restore evidence exists.
