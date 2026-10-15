@@ -4,7 +4,7 @@ Tridim Business is a global-ambition business operations platform from Tridim Te
 
 ## Project status
 
-This repository contains the internal alpha foundation and planning documents. Signed-in organization members can manage customers, prepare quotations, record quotation decisions, and create one linked job when a quotation is accepted. Assigned members can record synthetic expense claims for jobs; reviewers can return, waive missing evidence, approve, or reject them. Receipt uploads and real expense data are not supported. Finance members can issue invoices and record, allocate, and reverse manual receipts. Finance users can also initiate and track sandbox-only Daraja M-Pesa Express attempts from the invoice UI; attempts do not create ledger receipts automatically or enable live payments. Tax and quotation totals are not calculated. The illustrative workflow prototype uses synthetic data, has no backend and saves nothing.
+This repository contains the internal alpha foundation and planning documents. Signed-in organization members can manage customers, prepare quotations, record quotation decisions, and create one linked job when a quotation is accepted. The People area supports an employee directory and basic leave requests with manager decisions; it does not calculate leave balances, entitlements, or payroll. Assigned members can record synthetic expense claims for jobs; reviewers can return, waive missing evidence, approve, or reject them. Receipt uploads and real expense data are not supported. Finance members can issue invoices and record, allocate, and reverse manual receipts. Finance users can also initiate and track sandbox-only Daraja M-Pesa Express attempts from the invoice UI; attempts do not create ledger receipts automatically or enable live payments. Tax and quotation totals are not calculated. The illustrative workflow prototype uses synthetic data, has no backend and saves nothing.
 
 ## Start here
 
@@ -16,6 +16,7 @@ This repository contains the internal alpha foundation and planning documents. S
 6. Review [`docs/DATABASE_BACKUP_AND_RESTORE.md`](docs/DATABASE_BACKUP_AND_RESTORE.md) for the PostgreSQL recovery runbook and local synthetic rehearsal.
 7. Open [`prototype/job-to-cash/index.html`](prototype/job-to-cash/index.html) for the sample workflow concept.
 8. Read [`docs/EXPENSE_CLAIM_ALPHA.md`](docs/EXPENSE_CLAIM_ALPHA.md) for the synthetic expense claim API and UI.
+9. Read [`docs/EMPLOYEE_LEAVE_REQUESTS.md`](docs/EMPLOYEE_LEAVE_REQUESTS.md) for leave request roles, states, privacy boundaries, and API routes.
 
 ## Scope
 

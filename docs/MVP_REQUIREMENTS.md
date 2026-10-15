@@ -84,7 +84,8 @@ These are starting profiles, not substitutes for organization-scoped policy. Eac
 - Authorized HR/owner user maintains employee, department and employment-status records.
 - In the current internal alpha, owner/admin/operations users can create and update a minimal organization-scoped employee directory profile (display name, job title, department and active status); employees can read active profiles. The directory does not expose personal email, salary, payroll, government identifiers or home addresses, and a profile does not grant account access.
 - Directory profiles are linked to existing organization membership. Only active member accounts appear; managers can review inactive profiles. This profile increment does not implement employee invitations, leave balances or employment-contract records.
-- Employees submit leave requests; approvers decide with recorded outcome and date.
+- Organization members submit and track their own leave requests; owners, admins, and operations managers review requests from other members. Requests have inclusive dates, a category, an optional short note, and a recorded approval/rejection/cancellation history. The requester can cancel a pending request; rejection requires a reason; managers cannot approve or reject their own requests. Overlapping pending/approved requests are blocked. Notes must not include medical details or other sensitive information.
+- Leave categories are labels only. The current workflow does not calculate leave balances, accrual, paid/unpaid entitlement, carryover, public holidays, or statutory rules; it also does not implement payroll, calendar integration, or notifications. See [Employee leave requests](EMPLOYEE_LEAVE_REQUESTS.md).
 - Employees see only allowed personal profile and leave information.
 - Payroll calculations, payslips, tax submissions and statutory filing are out of MVP scope until separately validated and approved.
 
