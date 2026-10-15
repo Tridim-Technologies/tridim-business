@@ -2,6 +2,71 @@
 
 <!-- version list -->
 
+## v0.16.0 (2026-10-15)
+
+### Chores
+
+- **deps**: Add dependency maintenance workflow
+  ([#76](https://github.com/Tridim-Technologies/tridim-business/pull/76),
+  [`cbd7144`](https://github.com/Tridim-Technologies/tridim-business/commit/cbd71447c50eacc6b671e29733f634610d7c804a))
+
+- **deps**: Bump @vitejs/plugin-react from 6.1.1 to 6.1.2 in /frontend
+  ([#83](https://github.com/Tridim-Technologies/tridim-business/pull/83),
+  [`4c6149f`](https://github.com/Tridim-Technologies/tridim-business/commit/4c6149f62a2d0208285c439fde8518b7530fe813))
+
+- **deps**: Bump actions/checkout from 4 to 7
+  ([#77](https://github.com/Tridim-Technologies/tridim-business/pull/77),
+  [`e2949f0`](https://github.com/Tridim-Technologies/tridim-business/commit/e2949f0035932016a44fab60ba45dffa8b32f557))
+
+- **deps**: Bump actions/setup-node from 4 to 7
+  ([#79](https://github.com/Tridim-Technologies/tridim-business/pull/79),
+  [`c323149`](https://github.com/Tridim-Technologies/tridim-business/commit/c323149911ca1a5a92ac9394716e319c917292e2))
+
+- **deps**: Bump actions/setup-python from 5 to 7
+  ([#78](https://github.com/Tridim-Technologies/tridim-business/pull/78),
+  [`61fd565`](https://github.com/Tridim-Technologies/tridim-business/commit/61fd5658bc7ecd739087fc3144feaac2bd816b0b))
+
+- **deps**: Bump astral-sh/setup-uv from 6 to 7
+  ([#80](https://github.com/Tridim-Technologies/tridim-business/pull/80),
+  [`baa4309`](https://github.com/Tridim-Technologies/tridim-business/commit/baa4309b2a7bdc62ea55c654760722edcce1c944))
+
+- **deps**: Bump dj-database-url from 2.3.0 to 3.1.2
+  ([#81](https://github.com/Tridim-Technologies/tridim-business/pull/81),
+  [`7ff7023`](https://github.com/Tridim-Technologies/tridim-business/commit/7ff7023b2f1b3e65c0e0b1146b81c0fecdf97178))
+
+- **deps**: Bump djangorestframework from 3.18.1 to 3.18.3
+  ([#86](https://github.com/Tridim-Technologies/tridim-business/pull/86),
+  [`25c60d0`](https://github.com/Tridim-Technologies/tridim-business/commit/25c60d08cf49bd6d38cdc931ed912c23c8e2b990))
+
+- **deps**: Bump mpesa-sdk from 1.1.0 to 2.0.0
+  ([#85](https://github.com/Tridim-Technologies/tridim-business/pull/85),
+  [`7f54c19`](https://github.com/Tridim-Technologies/tridim-business/commit/7f54c19d59365046f0112478c39c47f8b3593f0e))
+
+- **deps**: Bump vite from 8.3.2 to 8.3.4 in /frontend
+  ([#82](https://github.com/Tridim-Technologies/tridim-business/pull/82),
+  [`912e10b`](https://github.com/Tridim-Technologies/tridim-business/commit/912e10bbf3511cabaace4ed9d4644b382f8bfd82))
+
+- **deps-dev**: Bump ruff from 0.16.10 to 0.17.0
+  ([#84](https://github.com/Tridim-Technologies/tridim-business/pull/84),
+  [`ba48060`](https://github.com/Tridim-Technologies/tridim-business/commit/ba480609be826da15f5b0a61dbddc52ff57e22c7))
+
+### Documentation
+
+- **ops**: Define alpha incident handoffs
+  ([#72](https://github.com/Tridim-Technologies/tridim-business/pull/72),
+  [`690e33f`](https://github.com/Tridim-Technologies/tridim-business/commit/690e33f790abe4cb4b0ec4921545d2e6a2f896f4))
+
+- **ops**: Simplify alpha operations guidance
+  ([#74](https://github.com/Tridim-Technologies/tridim-business/pull/74),
+  [`8f603f9`](https://github.com/Tridim-Technologies/tridim-business/commit/8f603f9d895bfa1ce88395181ddcb4de63810f71))
+
+### Features
+
+- **hr**: Add employee leave request workflow
+  ([#88](https://github.com/Tridim-Technologies/tridim-business/pull/88),
+  [`0d876ef`](https://github.com/Tridim-Technologies/tridim-business/commit/0d876effd15e46b62d13b54913ed91a77b74903b))
+
+
 ## v0.15.0 (2026-10-15)
 
 ### Documentation
