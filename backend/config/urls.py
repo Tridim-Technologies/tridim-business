@@ -2,6 +2,11 @@ from django.contrib import admin
 from django.urls import path
 from health.views import health_live_view, health_ready_view
 from hr.views import employee_detail_view, employees_view
+from hr.leave_views import (
+    leave_request_detail_view,
+    leave_request_transition_view,
+    leave_requests_view,
+)
 
 from accounts.views import csrf_token, session_view, organizations_view
 from customers.views import customer_detail_view, customers_view
@@ -66,6 +71,21 @@ urlpatterns = [
         "api/organizations/<uuid:organization_id>/employees/<int:profile_id>/",
         employee_detail_view,
         name="employee-detail",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/leave-requests/",
+        leave_requests_view,
+        name="leave-requests",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/leave-requests/<int:leave_request_id>/",
+        leave_request_detail_view,
+        name="leave-request-detail",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/leave-requests/<int:leave_request_id>/transition/",
+        leave_request_transition_view,
+        name="leave-request-transition",
     ),
     path(
         "api/organizations/<uuid:organization_id>/customers/",
