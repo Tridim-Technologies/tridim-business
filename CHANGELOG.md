@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.18.0 (2026-10-16)
+
+### Features
+
+- **accounts**: Email organization invitations
+  ([#92](https://github.com/Tridim-Technologies/tridim-business/pull/92),
+  [`43eba8d`](https://github.com/Tridim-Technologies/tridim-business/commit/43eba8d1e83c3a0714cc208d42a718b8c3aac4cb))
+
+
 ## v0.17.0 (2026-10-15)
 
 ### Features
