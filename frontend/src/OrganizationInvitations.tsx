@@ -42,6 +42,7 @@ export default function OrganizationInvitations({
 }) {
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [shareUrl, setShareUrl] = useState('')
+  const [emailSent, setEmailSent] = useState(false)
   const [copied, setCopied] = useState(false)
 
   async function refresh() {
@@ -53,6 +54,7 @@ export default function OrganizationInvitations({
   useEffect(() => {
     setInvitations([])
     setShareUrl('')
+    setEmailSent(false)
     refresh().catch((reason: Error) => setError(reason.message))
   }, [organization])
 
@@ -60,12 +62,13 @@ export default function OrganizationInvitations({
     event.preventDefault()
     setError('')
     setShareUrl('')
+    setEmailSent(false)
     setCopied(false)
     setSaving(true)
     const formElement = event.currentTarget
     const form = new FormData(formElement)
     try {
-      const result = await api<{ invitation: Invitation; token: string }>(
+      const result = await api<{ invitation: Invitation; email_sent: boolean; token?: string }>(
         `/api/organizations/${organization}/invitations/`,
         {
           method: 'POST',
@@ -73,9 +76,13 @@ export default function OrganizationInvitations({
           body: JSON.stringify({ email: form.get('email'), role: form.get('role') }),
         },
       )
-      const url = new URL(window.location.href)
-      url.hash = `invite=${encodeURIComponent(result.token)}`
-      setShareUrl(url.toString())
+      if (result.email_sent) {
+        setEmailSent(true)
+      } else if (result.token) {
+        const url = new URL(window.location.href)
+        url.hash = `invite=${encodeURIComponent(result.token)}`
+        setShareUrl(url.toString())
+      }
       formElement.reset()
       await refresh()
     } catch (reason) {
@@ -112,13 +119,14 @@ export default function OrganizationInvitations({
   return <>
     <div className="page-heading"><div><p className="eyebrow">PEOPLE</p><h1>Invitations</h1><p className="muted">Invite a team member to this organization.</p></div><span className="count-pill">{invitations.filter((item) => item.status === 'pending').length} pending</span></div>
     {error && <div className="alert inline-alert">{error}</div>}
-    <p className="invitation-notice">Email delivery is not configured. Create an invitation, copy the link, and share it directly with the intended person. The link works once for seven days and does not verify email ownership.</p>
+    <p className="invitation-notice">When SMTP is configured and accepts the message, the invitation link is sent to the invited address and hidden from this screen. SMTP acceptance does not confirm inbox delivery or verify mailbox ownership. If submission is disabled or unavailable, copy and share the one-time link.</p>
     <section className="panel invitation-create"><div className="panel-heading"><div><h2>Invite a member</h2><p>They can create an account or sign in to one that uses the invited email.</p></div></div>
       <form className="invitation-form" onSubmit={create}>
         <label>Email address<input type="email" name="email" autoComplete="email" maxLength={254} required /></label>
         <label>Organization role<select name="role" defaultValue="employee"><option value="employee">Employee</option><option value="sales">Sales</option><option value="operations">Operations</option><option value="finance">Finance</option>{canInviteAdmin && <option value="admin">Admin</option>}</select></label>
         <button className="primary" disabled={saving || !organization}>{saving ? 'Creating…' : 'Create invitation'} <span>＋</span></button>
       </form>
+      {emailSent && <div className="invitation-share"><strong>Invitation email submitted</strong><p>The mail server accepted the message for the invited address. Inbox delivery is not confirmed, and the private link is not shown here. If the recipient does not receive it, revoke this invitation and create a replacement. Email does not verify mailbox ownership.</p></div>}
       {shareUrl && <div className="invitation-share"><strong>Copy this link now</strong><p>The secret link is shown once. It expires after seven days.</p><div><input aria-label="Invitation link" readOnly value={shareUrl} onFocus={(event) => event.currentTarget.select()} /><button className="quiet-action" onClick={copyLink}>{copied ? 'Copied' : 'Copy link'}</button></div></div>}
     </section>
     <section className="panel invitation-list"><div className="panel-heading"><div><h2>Recent invitations</h2><p>Invitation links are never shown again after creation.</p></div></div>

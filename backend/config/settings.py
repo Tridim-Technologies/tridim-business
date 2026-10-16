@@ -1,6 +1,7 @@
 import os
 import secrets
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
@@ -109,6 +110,52 @@ CSRF_COOKIE_SAMESITE = "Lax"
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+# Invitation email is optional. The console backend remains the safe local
+# default; enable SMTP only after configuring credentials through the runtime
+# environment. A sent invitation link points to the frontend origin and is
+# placed in a URL fragment so it is not sent in the initial HTTP request.
+EMAIL_BACKEND = os.environ.get(
+    "DJANGO_EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+)
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_PORT = _positive_int_setting("EMAIL_PORT", 587)
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "0") == "1"
+EMAIL_TIMEOUT = _positive_int_setting("EMAIL_TIMEOUT", 10)
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL", "Tridim Business <no-reply@example.invalid>"
+)
+INVITATION_EMAIL_ENABLED = os.environ.get("INVITATION_EMAIL_ENABLED", "0") == "1"
+INVITATION_BASE_URL = os.environ.get("INVITATION_BASE_URL", "").strip()
+if INVITATION_EMAIL_ENABLED:
+    if EMAIL_USE_TLS and EMAIL_USE_SSL:
+        raise ImproperlyConfigured("Enable only one of EMAIL_USE_TLS or EMAIL_USE_SSL.")
+    if EMAIL_BACKEND != "django.core.mail.backends.smtp.EmailBackend" and not (
+        DEBUG and EMAIL_BACKEND == "django.core.mail.backends.locmem.EmailBackend"
+    ):
+        raise ImproperlyConfigured(
+            "Invitation email requires Django's SMTP backend outside tests."
+        )
+    if not EMAIL_HOST or "example.invalid" in DEFAULT_FROM_EMAIL:
+        raise ImproperlyConfigured(
+            "Invitation email requires EMAIL_HOST and a real DEFAULT_FROM_EMAIL."
+        )
+    parsed_invitation_url = urlsplit(INVITATION_BASE_URL)
+    if (
+        not parsed_invitation_url.netloc
+        or parsed_invitation_url.scheme not in {"http", "https"}
+        or parsed_invitation_url.username
+        or parsed_invitation_url.password
+        or parsed_invitation_url.query
+        or parsed_invitation_url.fragment
+        or (not DEBUG and parsed_invitation_url.scheme != "https")
+    ):
+        raise ImproperlyConfigured(
+            "INVITATION_BASE_URL must be an origin/path URL; use HTTPS outside local development."
+        )
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
