@@ -1,11 +1,15 @@
 import hashlib
 import json
+import logging
 import secrets
 from datetime import timedelta
+from urllib.parse import quote
 
+from django.conf import settings
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
 from django.http import JsonResponse
@@ -18,6 +22,7 @@ from .views import _organizations
 
 INVITATION_TTL = timedelta(days=7)
 MAX_BODY_BYTES = 4096
+logger = logging.getLogger(__name__)
 
 
 def _invitation_manager(membership):
@@ -62,6 +67,49 @@ def _invitation_payload(invitation):
 
 def _token_digest(token):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _send_invitation_email(invitation, token):
+    if not settings.INVITATION_EMAIL_ENABLED or not settings.INVITATION_BASE_URL:
+        return False
+    if settings.EMAIL_BACKEND not in {
+        "django.core.mail.backends.smtp.EmailBackend",
+        "django.core.mail.backends.locmem.EmailBackend",
+    }:
+        return False
+    role_label = dict(Membership.Role.choices).get(invitation.role, invitation.role)
+    base_url = settings.INVITATION_BASE_URL.rstrip("/") + "/"
+    invitation_url = f"{base_url}#invite={quote(token, safe='')}"
+    expires_at = timezone.localtime(invitation.expires_at).strftime(
+        "%B %d, %Y %H:%M %Z"
+    )
+    body = (
+        f"You have been invited to join {invitation.organization.name} "
+        f"as {role_label}.\n\n"
+        f"Accept the invitation: {invitation_url}\n\n"
+        f"This single-use link expires on {expires_at}. If you were not expecting "
+        "this invitation, you can ignore this message.\n\n"
+        "Accepting an invitation does not independently verify ownership of the "
+        "email address."
+    )
+    try:
+        delivered = send_mail(
+            subject=f"Invitation to join {invitation.organization.name}",
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[invitation.email],
+            fail_silently=False,
+        )
+    except Exception as error:
+        # Keep the failure path usable without logging addresses, tokens, or
+        # provider exception text that might contain sensitive delivery data.
+        logger.warning(
+            "Invitation email delivery failed for invitation %s (%s)",
+            invitation.pk,
+            type(error).__name__,
+        )
+        return False
+    return delivered == 1
 
 
 def _limited(request):
@@ -189,14 +237,15 @@ def organization_invitations_view(request, organization_id):
             status=409,
         )
 
-    return JsonResponse(
-        {
-            "invitation": _invitation_payload(invitation),
-            "token": token,
-            "share_once": True,
-        },
-        status=201,
-    )
+    email_sent = _send_invitation_email(invitation, token)
+    response = {
+        "invitation": _invitation_payload(invitation),
+        "email_sent": email_sent,
+        "share_once": not email_sent,
+    }
+    if not email_sent:
+        response["token"] = token
+    return JsonResponse(response, status=201)
 
 
 @require_http_methods(["POST"])

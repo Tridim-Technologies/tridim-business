@@ -1,7 +1,11 @@
+import hashlib
 import json
 from datetime import timedelta
+from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -9,7 +13,10 @@ from django.utils import timezone
 from .models import Membership, Organization, OrganizationInvitation
 
 
-@override_settings(PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"])
+@override_settings(
+    PASSWORD_HASHERS=["django.contrib.auth.hashers.MD5PasswordHasher"],
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+)
 class OrganizationInvitationApiTests(TestCase):
     def setUp(self):
         User = get_user_model()
@@ -95,6 +102,76 @@ class OrganizationInvitationApiTests(TestCase):
             self.admin,
         )
         self.assertEqual(duplicate.status_code, 409)
+
+    @override_settings(
+        INVITATION_EMAIL_ENABLED=True,
+        INVITATION_BASE_URL="http://app.example.test",
+        DEFAULT_FROM_EMAIL="Tridim Business <no-reply@example.test>",
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    )
+    def test_successful_email_hides_token_from_create_response(self):
+        self.assertTrue(settings.INVITATION_EMAIL_ENABLED)
+        self.assertEqual(
+            settings.EMAIL_BACKEND,
+            "django.core.mail.backends.locmem.EmailBackend",
+        )
+        result = self.create_invitation("new-member@example.com")
+
+        self.assertTrue(result["email_sent"], result)
+        self.assertFalse(result["share_once"])
+        self.assertNotIn("token", result)
+        self.assertEqual(len(mail.outbox), 1)
+        message = mail.outbox[0]
+        self.assertEqual(message.to, ["new-member@example.com"])
+        self.assertEqual(message.from_email, "Tridim Business <no-reply@example.test>")
+        self.assertIn("Invite Services", message.subject)
+        self.assertIn("Employee", message.body)
+        self.assertIn("expires", message.body.lower())
+
+        invite_link = next(
+            line.split(": ", 1)[1]
+            for line in message.body.splitlines()
+            if line.startswith("Accept the invitation: ")
+        )
+        self.assertTrue(invite_link.startswith("http://app.example.test/#invite="))
+        token = invite_link.split("#invite=", 1)[1]
+        invitation = OrganizationInvitation.objects.get(pk=result["invitation"]["id"])
+        self.assertEqual(
+            invitation.token_digest, hashlib.sha256(token.encode()).hexdigest()
+        )
+        self.assertNotIn(token, json.dumps(result))
+
+    @override_settings(INVITATION_EMAIL_ENABLED=False)
+    def test_disabled_email_keeps_manual_link_fallback(self):
+        result = self.create_invitation()
+
+        self.assertFalse(result["email_sent"])
+        self.assertTrue(result["share_once"])
+        self.assertTrue(result["token"])
+        self.assertEqual(mail.outbox, [])
+
+    @override_settings(
+        INVITATION_EMAIL_ENABLED=True,
+        INVITATION_BASE_URL="https://app.example.test",
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    )
+    @patch(
+        "accounts.invitation_views.send_mail",
+        side_effect=OSError("private smtp details"),
+    )
+    def test_email_failure_keeps_invitation_and_returns_manual_fallback(
+        self, _send_mail
+    ):
+        with self.assertLogs("accounts.invitation_views", level="WARNING") as captured:
+            result = self.create_invitation()
+
+        self.assertFalse(result["email_sent"])
+        self.assertTrue(result["share_once"])
+        self.assertTrue(result["token"])
+        self.assertIn("OSError", captured.output[0])
+        self.assertNotIn("private smtp details", captured.output[0])
+        invitation = OrganizationInvitation.objects.get(pk=result["invitation"]["id"])
+        self.assertEqual(invitation.status, OrganizationInvitation.Status.PENDING)
 
     def test_role_grants_prevent_owner_and_admin_escalation(self):
         owner_admin = self.create_invitation("admin-candidate@example.com", "admin")
