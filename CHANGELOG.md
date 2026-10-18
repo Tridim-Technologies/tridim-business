@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.18.1 (2026-10-18)
+
+### Bug Fixes
+
+- **release**: Recover partial tag publication
+  ([#94](https://github.com/Tridim-Technologies/tridim-business/pull/94),
+  [`b2f3bf4`](https://github.com/Tridim-Technologies/tridim-business/commit/b2f3bf4642117d4d0a429cbcb5e3abf6fc1b8e50))
+
+
 ## v0.18.0 (2026-10-16)
 
 ### Features
