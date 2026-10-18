@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.19.0 (2026-10-18)
+
+### Features
+
+- **expenses**: Add explicit evidence expiry controls
+  ([#96](https://github.com/Tridim-Technologies/tridim-business/pull/96),
+  [`2ffa4eb`](https://github.com/Tridim-Technologies/tridim-business/commit/2ffa4eb0a8c90f4a302ab22b92744e92d8fb2ec4))
+
+
 ## v0.18.1 (2026-10-18)
 
 ### Bug Fixes
