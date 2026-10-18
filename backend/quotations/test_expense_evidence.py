@@ -1,14 +1,16 @@
 import io
 import os
 import tempfile
+from datetime import UTC
 from datetime import timedelta
 from pathlib import Path
+from io import StringIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -165,6 +167,7 @@ class ExpenseEvidenceTests(TestCase):
             scan.assert_called_once()
 
     @override_settings(
+        DEBUG=True,
         EXPENSE_EVIDENCE_ENABLED=True,
         EXPENSE_EVIDENCE_STORAGE_ROOT="",
     )
@@ -424,3 +427,213 @@ class ExpenseEvidenceTests(TestCase):
                     outcome="purged",
                 ).exists()
             )
+
+    def upload_accepted_evidence(self):
+        self.client.force_login(self.employee)
+        response = self.client.post(
+            self.evidence_url(),
+            {"revision": str(self.claim.revision), "file": self.png_upload()},
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        evidence = ExpenseClaimEvidence.objects.get(pk=response.json()["id"])
+        path = Path(self.storage.name) / f"{evidence.storage_key}.evidence"
+        return evidence, path
+
+    @override_settings(
+        DEBUG=True,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
+    def test_expiry_dry_run_reports_only_eligible_accepted_evidence(self, _scan):
+        with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
+            evidence, path = self.upload_accepted_evidence()
+            recent_evidence, recent_path = self.upload_accepted_evidence()
+            rejected_evidence, rejected_path = self.upload_accepted_evidence()
+            evidence.accepted_at = timezone.now() - timedelta(days=3)
+            evidence.save(update_fields=["accepted_at"])
+            rejected_evidence.state = ExpenseClaimEvidence.State.REJECTED
+            rejected_evidence.save(update_fields=["state"])
+            cutoff = timezone.now() - timedelta(days=2)
+            output = StringIO()
+
+            call_command(
+                "expire_expense_evidence",
+                accepted_before=cutoff.isoformat(),
+                stdout=output,
+            )
+
+            evidence.refresh_from_db()
+            recent_evidence.refresh_from_db()
+            rejected_evidence.refresh_from_db()
+            self.assertEqual(evidence.state, ExpenseClaimEvidence.State.ACCEPTED)
+            self.assertEqual(recent_evidence.state, ExpenseClaimEvidence.State.ACCEPTED)
+            self.assertEqual(
+                rejected_evidence.state, ExpenseClaimEvidence.State.REJECTED
+            )
+            self.assertTrue(path.exists())
+            self.assertTrue(recent_path.exists())
+            self.assertTrue(rejected_path.exists())
+            self.assertIn("DRY RUN: would expire 1", output.getvalue())
+            self.assertFalse(
+                ExpenseEvidenceAuditEvent.objects.filter(
+                    action=ExpenseEvidenceAuditEvent.Action.RETENTION_EXPIRE
+                ).exists()
+            )
+
+    @override_settings(
+        DEBUG=True,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
+    def test_applied_expiry_tombstones_before_purge_and_records_cutoff(self, _scan):
+        with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
+            evidence, path = self.upload_accepted_evidence()
+            evidence.accepted_at = timezone.now() - timedelta(days=3)
+            evidence.save(update_fields=["accepted_at"])
+            cutoff = (timezone.now() - timedelta(days=2)).replace(microsecond=0)
+            call_command(
+                "expire_expense_evidence",
+                accepted_before=cutoff.isoformat(),
+                apply=True,
+                reason="Synthetic lifecycle cleanup test",
+                verbosity=0,
+            )
+
+            evidence.refresh_from_db()
+            self.assertEqual(evidence.state, ExpenseClaimEvidence.State.DELETED)
+            self.assertIsNotNone(evidence.deleted_at)
+            self.assertFalse(path.exists())
+            event = ExpenseEvidenceAuditEvent.objects.get(
+                evidence=evidence,
+                action=ExpenseEvidenceAuditEvent.Action.RETENTION_EXPIRE,
+            )
+            self.assertEqual(event.outcome, "expired")
+            self.assertEqual(
+                event.metadata,
+                {
+                    "accepted_before": cutoff.astimezone(UTC).isoformat(),
+                    "reason": "Synthetic lifecycle cleanup test",
+                },
+            )
+
+    @override_settings(
+        DEBUG=True,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
+    def test_cleanup_reconciles_restored_bytes_without_duplicate_expiry_event(
+        self, _scan
+    ):
+        with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
+            evidence, path = self.upload_accepted_evidence()
+            evidence.accepted_at = timezone.now() - timedelta(days=3)
+            evidence.save(update_fields=["accepted_at"])
+            cutoff = timezone.now() - timedelta(days=2)
+            call_command(
+                "expire_expense_evidence",
+                accepted_before=cutoff.isoformat(),
+                apply=True,
+                reason="Synthetic restore cleanup test",
+                verbosity=0,
+            )
+            evidence.refresh_from_db()
+            self.assertEqual(evidence.state, ExpenseClaimEvidence.State.DELETED)
+
+            path.write_bytes(b"synthetic restored object bytes")
+            call_command("cleanup_expense_evidence", verbosity=0)
+
+            evidence.refresh_from_db()
+            self.assertEqual(evidence.state, ExpenseClaimEvidence.State.DELETED)
+            self.assertFalse(path.exists())
+            self.assertEqual(
+                ExpenseEvidenceAuditEvent.objects.filter(
+                    evidence=evidence,
+                    action=ExpenseEvidenceAuditEvent.Action.RETENTION_EXPIRE,
+                ).count(),
+                1,
+            )
+
+    @override_settings(
+        DEBUG=True,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
+    @patch(
+        "quotations.management.commands.expire_expense_evidence.PrivateLocalEvidenceStorage.delete",
+        side_effect=OSError("synthetic storage failure"),
+    )
+    def test_failed_file_purge_keeps_an_inaccessible_retryable_tombstone(
+        self, _delete, _scan
+    ):
+        with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
+            evidence, path = self.upload_accepted_evidence()
+            evidence.accepted_at = timezone.now() - timedelta(days=3)
+            evidence.save(update_fields=["accepted_at"])
+            cutoff = timezone.now() - timedelta(days=2)
+
+            with self.assertRaisesMessage(
+                CommandError, "Some expired evidence remains inaccessible"
+            ):
+                call_command(
+                    "expire_expense_evidence",
+                    accepted_before=cutoff.isoformat(),
+                    apply=True,
+                    reason="Synthetic storage failure test",
+                )
+
+            evidence.refresh_from_db()
+            self.assertEqual(evidence.state, ExpenseClaimEvidence.State.DELETED)
+            self.assertTrue(path.exists())
+            self.assertEqual(
+                ExpenseEvidenceAuditEvent.objects.filter(
+                    evidence=evidence,
+                    action=ExpenseEvidenceAuditEvent.Action.RETENTION_EXPIRE,
+                ).count(),
+                1,
+            )
+
+    @override_settings(
+        DEBUG=False,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    def test_expiry_is_refused_outside_local_synthetic_configuration(self):
+        with self.assertRaisesMessage(
+            CommandError,
+            "Evidence expiry is limited to the gated local synthetic-data configuration.",
+        ):
+            call_command(
+                "expire_expense_evidence",
+                accepted_before="2026-10-17T00:00:00+00:00",
+                apply=True,
+            )
+
+    @override_settings(
+        DEBUG=True,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    def test_expiry_requires_aware_cutoff_in_the_past(self):
+        with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
+            valid_cutoff = (timezone.now() - timedelta(days=1)).isoformat()
+            with self.assertRaisesMessage(CommandError, "--reason is required"):
+                call_command(
+                    "expire_expense_evidence",
+                    accepted_before=valid_cutoff,
+                    apply=True,
+                )
+
+            for cutoff in (
+                "2026-10-17T00:00:00",
+                (timezone.now() + timedelta(days=1)).isoformat(),
+            ):
+                with self.subTest(cutoff=cutoff), self.assertRaises(CommandError):
+                    call_command(
+                        "expire_expense_evidence",
+                        accepted_before=cutoff,
+                        apply=True,
+                    )

@@ -357,6 +357,7 @@ class ExpenseClaimEvidence(models.Model):
         indexes = [
             models.Index(fields=["claim", "claim_version", "state"]),
             models.Index(fields=["state", "created_at"]),
+            models.Index(fields=["state", "accepted_at"]),
         ]
 
 
@@ -368,6 +369,7 @@ class ExpenseEvidenceAuditEvent(models.Model):
         SCAN_ERROR = "scan_error", "Scan error"
         DOWNLOAD = "download", "Downloaded"
         DELETE = "delete", "Deleted"
+        RETENTION_EXPIRE = "retention_expire", "Retention expiry"
 
     organization = models.ForeignKey(
         Organization, on_delete=models.CASCADE, related_name="expense_evidence_audit"
@@ -390,6 +392,7 @@ class ExpenseEvidenceAuditEvent(models.Model):
     )
     action = models.CharField(max_length=16, choices=Action.choices)
     outcome = models.CharField(max_length=16)
+    metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
