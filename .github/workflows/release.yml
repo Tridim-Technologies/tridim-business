@@ -33,4 +33,4 @@ jobs:
       - name: Publish GitHub release when commits require a version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: uv run semantic-release version
+        run: uv run python scripts/semantic_release_with_recovery.py

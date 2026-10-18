@@ -39,9 +39,11 @@ jobs:
       - name: Check migration consistency
         run: uv run python backend/manage.py makemigrations --check --dry-run
       - name: Lint and format Python
-        run: uv run ruff check backend && uv run ruff format --check backend
+        run: uv run ruff check backend scripts tests && uv run ruff format --check backend scripts tests
       - name: Test Django APIs, organization permissions and invoicing
         run: uv run python backend/manage.py test accounts customers quotations invoicing health hr
+      - name: Test release recovery safeguards
+        run: uv run python -m unittest tests.test_semantic_release_recovery
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
