@@ -79,7 +79,16 @@ Use a disposable local database for the walkthrough, and keep its evidence stora
 
 Only use generated synthetic files. Current limits are 10 MiB per file, five files per claim version, and 25 MiB across a claim. The backend checks the extension, declared MIME type, file signature, image decoding/dimensions, PDF parsing/encryption/page count, and SHA-256 digest. Originals are stored under opaque names with directory mode `0700` and file mode `0600`; download requires a fresh organization/claim/role check and is sent as an attachment with `nosniff`. A draft claimant may remove evidence. Submitted evidence remains attached to its version; evidence added after return belongs to the next version.
 
-The `cleanup_expense_evidence` command purges stale quarantined/rejected files and retries removal of deleted objects. It does not select a retention period or purge accepted evidence. Do not use this local adapter for production or real business data. Production parsing isolation, storage/scanner selection and security review, customer-specific retention and deletion, backups, support ownership, monitoring, and incident response remain open readiness gates.
+The `cleanup_expense_evidence` command purges stale quarantined/rejected files and retries removal of deleted objects. To review which accepted synthetic files an explicit cutoff would expire, run a dry run:
+
+```sh
+DJANGO_DEBUG=1 EXPENSE_EVIDENCE_ENABLED=1 uv run python backend/manage.py expire_expense_evidence \
+  --accepted-before "<timezone-aware ISO 8601 cutoff>"
+```
+
+The command requires a past, timezone-aware cutoff and has no default retention duration. It reports only the number and total size of matching accepted evidence. To apply a reviewed synthetic-data cleanup, add `--apply --reason "<brief non-sensitive reason>"`. The command records the supplied cutoff and reason in the evidence audit metadata, makes the tombstone inaccessible before removing file bytes, and leaves failed removals for `cleanup_expense_evidence` to retry. Keep reasons short; do not include receipt details or other personal data. This operation is limited to the local synthetic-data gate and does not set an organization retention policy.
+
+After a local restore that retains `DELETED` database tombstones, run `cleanup_expense_evidence` before enabling the synthetic upload route; this removes any restored file bytes whose records are still tombstoned. If the restored database snapshot predates a deletion, it also predates that tombstone, so this command cannot identify the deleted file. An independent deletion ledger and storage-specific reconciliation are still required before any real evidence or combined database/object-store restore is allowed. Do not use this local adapter for production or real business data. Production parsing isolation, storage/scanner selection and security review, customer-specific retention and deletion, backups, support ownership, monitoring, and incident response remain open readiness gates.
 
 Approval does not create an invoice line, ledger entry, reimbursement, payroll item, or payment. Currencies stay separate.
 
