@@ -178,11 +178,19 @@ DARAJA_CALLBACK_URL = os.environ.get("DARAJA_CALLBACK_URL", "")
 # backup, support, and incident controls have been reviewed.
 EXPENSE_EVIDENCE_ENABLED = (
     DEBUG
+    and bool(ALLOWED_HOSTS)
     and all(host in {"localhost", "127.0.0.1", "[::1]"} for host in ALLOWED_HOSTS)
     and os.environ.get("EXPENSE_EVIDENCE_ENABLED", "0") == "1"
 )
+EXPENSE_EVIDENCE_LOCAL_HOSTS_ALLOWED = bool(ALLOWED_HOSTS) and all(
+    host in {"localhost", "127.0.0.1", "[::1]"} for host in ALLOWED_HOSTS
+)
 EXPENSE_EVIDENCE_STORAGE_ROOT = Path(
     os.environ.get("EXPENSE_EVIDENCE_STORAGE_ROOT") or BASE_DIR / ".private-evidence"
+)
+EXPENSE_EVIDENCE_LEDGER_ROOT = Path(
+    os.environ.get("EXPENSE_EVIDENCE_LEDGER_ROOT")
+    or BASE_DIR / ".private-evidence-ledger"
 )
 EXPENSE_EVIDENCE_CLAMD_SOCKET = os.environ.get("EXPENSE_EVIDENCE_CLAMD_SOCKET", "")
 EXPENSE_EVIDENCE_MAX_FILE_BYTES = _positive_int_setting(

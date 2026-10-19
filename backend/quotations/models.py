@@ -328,6 +328,7 @@ class ExpenseClaimEvidence(models.Model):
         QUARANTINED = "quarantined", "Quarantined"
         ACCEPTED = "accepted", "Accepted"
         REJECTED = "rejected", "Rejected"
+        DELETION_PENDING = "deletion_pending", "Deletion pending"
         DELETED = "deleted", "Deleted"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -339,7 +340,7 @@ class ExpenseClaimEvidence(models.Model):
     )
     claim_version = models.PositiveIntegerField()
     storage_key = models.CharField(max_length=32, unique=True)
-    state = models.CharField(max_length=12, choices=State.choices)
+    state = models.CharField(max_length=16, choices=State.choices)
     detected_media_type = models.CharField(max_length=32)
     size_bytes = models.PositiveIntegerField()
     sha256 = models.CharField(max_length=64)
