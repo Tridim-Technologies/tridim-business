@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v0.20.0 (2026-10-19)
+
+### Documentation
+
+- **recovery**: Define evidence deletion ledger
+  ([#98](https://github.com/Tridim-Technologies/tridim-business/pull/98),
+  [`9f87277`](https://github.com/Tridim-Technologies/tridim-business/commit/9f87277372d923828e325b07d74bb7ea21630055))
+
+### Features
+
+- **evidence**: Journal local deletion intents
+  ([#100](https://github.com/Tridim-Technologies/tridim-business/pull/100),
+  [`6beadf9`](https://github.com/Tridim-Technologies/tridim-business/commit/6beadf91e4edd3c4e63f39dd62e032eace48cc71))
+
+
 ## v0.19.0 (2026-10-18)
 
 ### Features
