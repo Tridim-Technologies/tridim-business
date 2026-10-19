@@ -1,5 +1,6 @@
 import io
 import os
+import sqlite3
 import tempfile
 from datetime import UTC
 from datetime import timedelta
@@ -11,6 +12,7 @@ from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import CommandError, call_command
+from django.db import transaction
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -20,6 +22,11 @@ from pypdf import PdfWriter
 from accounts.models import Membership, Organization
 from customers.models import Customer
 
+from .deletion_ledger import (
+    DeletionLedgerError,
+    LocalSyntheticEvidenceDeletionLedger,
+)
+from .evidence_deletion import mark_deletion_pending
 from .models import (
     ExpenseClaim,
     ExpenseClaimEvidence,
@@ -31,6 +38,7 @@ from .models import (
 from .evidence import EvidenceError, PrivateLocalEvidenceStorage
 
 
+@override_settings(DEBUG=True, EXPENSE_EVIDENCE_LOCAL_HOSTS_ALLOWED=True)
 class ExpenseEvidenceTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
@@ -87,8 +95,15 @@ class ExpenseEvidenceTests(TestCase):
             purpose="Synthetic test expense",
         )
         self.storage = tempfile.TemporaryDirectory()
+        self.ledger = tempfile.TemporaryDirectory()
+        self.ledger_settings = override_settings(
+            EXPENSE_EVIDENCE_LEDGER_ROOT=self.ledger.name
+        )
+        self.ledger_settings.enable()
 
     def tearDown(self):
+        self.ledger_settings.disable()
+        self.ledger.cleanup()
         self.storage.cleanup()
 
     def evidence_url(self, claim=None):
@@ -249,7 +264,7 @@ class ExpenseEvidenceTests(TestCase):
                     evidence=evidence,
                     actor=self.employee,
                     action=ExpenseEvidenceAuditEvent.Action.DELETE,
-                    outcome="deleted",
+                    outcome="purged",
                 ).exists()
             )
 
@@ -445,6 +460,233 @@ class ExpenseEvidenceTests(TestCase):
         EXPENSE_EVIDENCE_STORAGE_ROOT="",
     )
     @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
+    def test_delete_failure_keeps_pending_row_and_replayable_journal_intent(
+        self, _scan
+    ):
+        with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
+            evidence, path = self.upload_accepted_evidence()
+            with patch(
+                "quotations.evidence_deletion.PrivateLocalEvidenceStorage.delete",
+                side_effect=OSError("synthetic storage failure"),
+            ):
+                response = self.client.delete(self.item_url(evidence))
+
+            self.assertEqual(response.status_code, 503)
+            evidence.refresh_from_db()
+            self.assertEqual(
+                evidence.state, ExpenseClaimEvidence.State.DELETION_PENDING
+            )
+            self.assertTrue(path.exists())
+            self.assertEqual(self.client.get(self.item_url(evidence)).status_code, 404)
+            intents = LocalSyntheticEvidenceDeletionLedger().intents()
+            self.assertEqual(len(intents), 1)
+            self.assertFalse(intents[0]["purged"])
+
+            with override_settings(EXPENSE_EVIDENCE_ENABLED=False):
+                call_command("reconcile_expense_evidence_deletions", apply=True)
+
+            evidence.refresh_from_db()
+            self.assertEqual(evidence.state, ExpenseClaimEvidence.State.DELETED)
+            self.assertFalse(path.exists())
+            self.assertTrue(
+                LocalSyntheticEvidenceDeletionLedger().intents()[0]["purged"]
+            )
+
+    @override_settings(
+        DEBUG=True,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
+    def test_replay_completes_when_crash_follows_byte_purge(self, _scan):
+        with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
+            evidence, path = self.upload_accepted_evidence()
+            record_purged = LocalSyntheticEvidenceDeletionLedger.record_purged
+            with patch.object(
+                LocalSyntheticEvidenceDeletionLedger,
+                "record_purged",
+                side_effect=OSError("synthetic crash after object purge"),
+            ):
+                response = self.client.delete(self.item_url(evidence))
+
+            self.assertEqual(response.status_code, 503)
+            self.assertFalse(path.exists())
+            evidence.refresh_from_db()
+            self.assertEqual(
+                evidence.state, ExpenseClaimEvidence.State.DELETION_PENDING
+            )
+            self.assertFalse(
+                LocalSyntheticEvidenceDeletionLedger().intents()[0]["purged"]
+            )
+
+            with override_settings(EXPENSE_EVIDENCE_ENABLED=False):
+                with patch.object(
+                    LocalSyntheticEvidenceDeletionLedger,
+                    "record_purged",
+                    record_purged,
+                ):
+                    call_command("reconcile_expense_evidence_deletions", apply=True)
+
+            evidence.refresh_from_db()
+            self.assertEqual(evidence.state, ExpenseClaimEvidence.State.DELETED)
+            self.assertTrue(
+                LocalSyntheticEvidenceDeletionLedger().intents()[0]["purged"]
+            )
+
+    @override_settings(
+        DEBUG=True,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
+    def test_replay_reconciles_restored_older_database_and_file_snapshots(self, _scan):
+        with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
+            evidence, path = self.upload_accepted_evidence()
+            response = self.client.delete(self.item_url(evidence))
+            self.assertEqual(response.status_code, 200, response.content)
+            evidence.refresh_from_db()
+            evidence.state = ExpenseClaimEvidence.State.ACCEPTED
+            evidence.deleted_at = None
+            evidence.save(update_fields=["state", "deleted_at"])
+            path.write_bytes(b"synthetic bytes from an older object snapshot")
+
+            with override_settings(EXPENSE_EVIDENCE_ENABLED=False):
+                output = StringIO()
+                call_command("reconcile_expense_evidence_deletions", stdout=output)
+                self.assertIn("DRY RUN: found 1 deletion intent", output.getvalue())
+                self.assertTrue(path.exists())
+                evidence.refresh_from_db()
+                self.assertEqual(evidence.state, ExpenseClaimEvidence.State.ACCEPTED)
+
+                call_command("reconcile_expense_evidence_deletions", apply=True)
+                call_command("reconcile_expense_evidence_deletions", apply=True)
+
+            evidence.refresh_from_db()
+            self.assertEqual(evidence.state, ExpenseClaimEvidence.State.DELETED)
+            self.assertFalse(path.exists())
+            intents = LocalSyntheticEvidenceDeletionLedger().intents()
+            self.assertEqual(len(intents), 1)
+            self.assertTrue(intents[0]["purged"])
+            self.assertEqual(
+                ExpenseEvidenceAuditEvent.objects.filter(
+                    evidence=evidence, outcome="restore_replayed"
+                ).count(),
+                1,
+            )
+
+    @override_settings(
+        DEBUG=True,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
+    def test_replay_purges_object_even_when_restored_database_row_is_missing(
+        self, _scan
+    ):
+        with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
+            evidence, path = self.upload_accepted_evidence()
+            response = self.client.delete(self.item_url(evidence))
+            self.assertEqual(response.status_code, 200, response.content)
+            evidence.delete()
+            path.write_bytes(b"synthetic bytes from an older object snapshot")
+
+            with override_settings(EXPENSE_EVIDENCE_ENABLED=False):
+                call_command("reconcile_expense_evidence_deletions", apply=True)
+
+            self.assertFalse(path.exists())
+            self.assertFalse(
+                ExpenseClaimEvidence.objects.filter(pk=evidence.pk).exists()
+            )
+
+    @override_settings(
+        DEBUG=True,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
+    def test_pending_row_without_acknowledged_intent_can_be_retried(self, _scan):
+        with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
+            evidence, path = self.upload_accepted_evidence()
+            with patch(
+                "quotations.evidence_deletion.LocalSyntheticEvidenceDeletionLedger.record_intent",
+                side_effect=DeletionLedgerError("synthetic journal failure"),
+            ):
+                response = self.client.delete(self.item_url(evidence))
+            self.assertEqual(response.status_code, 503)
+            evidence.refresh_from_db()
+            self.assertEqual(
+                evidence.state, ExpenseClaimEvidence.State.DELETION_PENDING
+            )
+            self.assertTrue(path.exists())
+
+            with override_settings(EXPENSE_EVIDENCE_ENABLED=False):
+                output = StringIO()
+                call_command("reconcile_expense_evidence_deletions", stdout=output)
+                self.assertIn(
+                    "1 pending/deleted row(s) without an intent", output.getvalue()
+                )
+                call_command("reconcile_expense_evidence_deletions", apply=True)
+
+            evidence.refresh_from_db()
+            self.assertEqual(evidence.state, ExpenseClaimEvidence.State.DELETED)
+            self.assertFalse(path.exists())
+
+    @override_settings(
+        DEBUG=True,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
+    def test_corrupt_journal_fails_closed_without_purging_restored_bytes(self, _scan):
+        with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
+            evidence, path = self.upload_accepted_evidence()
+            with transaction.atomic():
+                evidence = ExpenseClaimEvidence.objects.select_for_update().get(
+                    pk=evidence.pk
+                )
+                mark_deletion_pending(
+                    evidence,
+                    action=ExpenseEvidenceAuditEvent.Action.DELETE,
+                    reason_code="synthetic_test",
+                )
+            ledger = LocalSyntheticEvidenceDeletionLedger()
+            ledger.record_intent(
+                evidence.pk,
+                evidence.organization_id,
+                evidence.claim_id,
+                evidence.storage_key,
+                "synthetic_test",
+            )
+            connection = sqlite3.connect(ledger.database)
+            connection.execute("DROP TRIGGER deletion_event_no_update")
+            connection.execute(
+                "UPDATE deletion_event SET storage_key=? WHERE event_type='intent'",
+                ("f" * 32,),
+            )
+            connection.commit()
+            connection.close()
+
+            with override_settings(EXPENSE_EVIDENCE_ENABLED=False):
+                with self.assertRaisesMessage(CommandError, "integrity verification"):
+                    call_command("reconcile_expense_evidence_deletions", apply=True)
+            self.assertTrue(path.exists())
+
+    def test_ledger_rejects_path_overlap_with_evidence_storage(self):
+        with override_settings(
+            EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name,
+            EXPENSE_EVIDENCE_LEDGER_ROOT=self.storage.name,
+        ):
+            with self.assertRaisesMessage(
+                DeletionLedgerError, "must use separate directories"
+            ):
+                LocalSyntheticEvidenceDeletionLedger().intents()
+
+    @override_settings(
+        DEBUG=True,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
     def test_expiry_dry_run_reports_only_eligible_accepted_evidence(self, _scan):
         with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
             evidence, path = self.upload_accepted_evidence()
@@ -508,6 +750,7 @@ class ExpenseEvidenceTests(TestCase):
             event = ExpenseEvidenceAuditEvent.objects.get(
                 evidence=evidence,
                 action=ExpenseEvidenceAuditEvent.Action.RETENTION_EXPIRE,
+                outcome="expired",
             )
             self.assertEqual(event.outcome, "expired")
             self.assertEqual(
@@ -552,6 +795,7 @@ class ExpenseEvidenceTests(TestCase):
                 ExpenseEvidenceAuditEvent.objects.filter(
                     evidence=evidence,
                     action=ExpenseEvidenceAuditEvent.Action.RETENTION_EXPIRE,
+                    outcome="expired",
                 ).count(),
                 1,
             )
@@ -563,7 +807,7 @@ class ExpenseEvidenceTests(TestCase):
     )
     @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
     @patch(
-        "quotations.management.commands.expire_expense_evidence.PrivateLocalEvidenceStorage.delete",
+        "quotations.evidence_deletion.PrivateLocalEvidenceStorage.delete",
         side_effect=OSError("synthetic storage failure"),
     )
     def test_failed_file_purge_keeps_an_inaccessible_retryable_tombstone(
@@ -586,7 +830,9 @@ class ExpenseEvidenceTests(TestCase):
                 )
 
             evidence.refresh_from_db()
-            self.assertEqual(evidence.state, ExpenseClaimEvidence.State.DELETED)
+            self.assertEqual(
+                evidence.state, ExpenseClaimEvidence.State.DELETION_PENDING
+            )
             self.assertTrue(path.exists())
             self.assertEqual(
                 ExpenseEvidenceAuditEvent.objects.filter(

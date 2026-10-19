@@ -7,7 +7,9 @@ from django.db.models import Sum
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from quotations.evidence import EvidenceError, PrivateLocalEvidenceStorage
+from quotations.deletion_ledger import DeletionLedgerError
+from quotations.evidence import EvidenceError
+from quotations.evidence_deletion import finish_evidence_deletion, mark_deletion_pending
 from quotations.models import ExpenseClaimEvidence, ExpenseEvidenceAuditEvent
 
 
@@ -67,7 +69,6 @@ class Command(BaseCommand):
             )
             return
 
-        storage = PrivateLocalEvidenceStorage()
         expired = 0
         purge_failures = 0
         for evidence_id in candidates.values_list("pk", flat=True).iterator(
@@ -87,28 +88,29 @@ class Command(BaseCommand):
                 if evidence is None:
                     continue
 
-                deleted_at = timezone.now()
-                evidence.state = ExpenseClaimEvidence.State.DELETED
-                evidence.deleted_at = deleted_at
-                evidence.save(update_fields=["state", "deleted_at"])
-                ExpenseEvidenceAuditEvent.objects.create(
-                    organization_id=evidence.organization_id,
-                    claim=evidence.claim,
-                    evidence=evidence,
-                    actor=None,
+                mark_deletion_pending(
+                    evidence,
                     action=ExpenseEvidenceAuditEvent.Action.RETENTION_EXPIRE,
-                    outcome="expired",
-                    metadata={
+                    reason_code="retention_expiry",
+                    audit_metadata={
                         "accepted_before": cutoff.isoformat(),
                         "reason": reason,
                     },
                 )
-                storage_key = evidence.storage_key
-                expired += 1
 
             try:
-                storage.delete(storage_key)
-            except (EvidenceError, OSError):
+                finish_evidence_deletion(
+                    evidence_id,
+                    reason_code="retention_expiry",
+                    action=ExpenseEvidenceAuditEvent.Action.RETENTION_EXPIRE,
+                    completed_outcome="expired",
+                    audit_metadata={
+                        "accepted_before": cutoff.isoformat(),
+                        "reason": reason,
+                    },
+                )
+                expired += 1
+            except (DeletionLedgerError, EvidenceError, OSError):
                 purge_failures += 1
 
         self.stdout.write(

@@ -4,6 +4,7 @@ from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
+from .deletion_ledger import DeletionLedgerError
 from .evidence import (
     ClamAVUnixScanner,
     EvidenceError,
@@ -13,6 +14,7 @@ from .evidence import (
     read_upload,
     validate_content,
 )
+from .evidence_deletion import finish_evidence_deletion, mark_deletion_pending
 from .expense_serializers import ExpenseClaimEvidenceSerializer
 from .job_views import JOB_MANAGERS, _membership
 from .models import (
@@ -59,14 +61,6 @@ def _target_version(claim):
     if claim.status == ExpenseClaim.Status.RETURNED:
         return claim.version + 1
     return None
-
-
-def _delete_storage_object(storage_key):
-    try:
-        PrivateLocalEvidenceStorage().delete(storage_key)
-    except (EvidenceError, OSError):
-        # The tombstone stays inaccessible; the cleanup command retries removal.
-        return
 
 
 def _evidence_rows(claim):
@@ -145,7 +139,10 @@ def expense_claim_evidence_view(request, organization_id, claim_id):
                 {"file": ["File could not be safely validated."]}, status=400
             )
         existing = _evidence_rows(claim).exclude(
-            state=ExpenseClaimEvidence.State.DELETED
+            state__in=[
+                ExpenseClaimEvidence.State.DELETION_PENDING,
+                ExpenseClaimEvidence.State.DELETED,
+            ]
         )
         version_count = existing.filter(claim_version=version).count()
         total_bytes = sum(existing.values_list("size_bytes", flat=True))
@@ -271,17 +268,26 @@ def expense_claim_evidence_detail_view(request, organization_id, claim_id, evide
                 or evidence.state != ExpenseClaimEvidence.State.ACCEPTED
             ):
                 return JsonResponse({"detail": "Evidence not found."}, status=404)
-            evidence.state = ExpenseClaimEvidence.State.DELETED
-            evidence.deleted_at = timezone.now()
-            evidence.save(update_fields=["state", "deleted_at"])
-            _audit(
-                claim,
+            mark_deletion_pending(
                 evidence,
-                request.user,
-                ExpenseEvidenceAuditEvent.Action.DELETE,
-                "deleted",
+                action=ExpenseEvidenceAuditEvent.Action.DELETE,
+                reason_code="claimant_delete",
+                actor=request.user,
             )
-            transaction.on_commit(lambda: _delete_storage_object(evidence.storage_key))
+            evidence_id = evidence.pk
+        try:
+            finish_evidence_deletion(
+                evidence_id,
+                reason_code="claimant_delete",
+                action=ExpenseEvidenceAuditEvent.Action.DELETE,
+            )
+        except (DeletionLedgerError, EvidenceError, OSError):
+            return JsonResponse(
+                {
+                    "detail": "Evidence removal is pending and will be retried; the file is inaccessible."
+                },
+                status=503,
+            )
         return JsonResponse(
             {"detail": "Evidence removed from this editable claim version."}
         )
