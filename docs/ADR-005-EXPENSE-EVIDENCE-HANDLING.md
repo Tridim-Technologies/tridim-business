@@ -93,11 +93,14 @@ An independent production ledger must remain available for at least as long as a
 
 This design does not solve unrelated orphan objects created after a database backup but absent from the restored database. A provider-specific inventory/manifest reconciliation is also required before enabling evidence access. No provider or deployment has been selected.
 
+The implementation-pattern comparison, object-store control evaluation, restore acceptance matrix, and access-enable evidence are maintained in [Production Expense-Evidence Recovery Design](PRODUCTION_EVIDENCE_RECOVERY_DESIGN.md). The preferred architecture for evaluation is an append-only ledger in a separately administered recovery boundary with a separately protected integrity checkpoint. This is a provider-neutral direction only; the provider, region, ledger service, retention policy, and deployment remain undecided. The design distinguishes application inaccessibility from provider-confirmed purge and permanent expiry, since versioning, soft deletion, legal holds, and immutable retention can preserve recoverable bytes after an application delete request.
+
 ## Open decisions before implementation or real-data use
 
 - Revisit one-claim-per-expense, reviewer permissions, and the default receipt rule only if workflow evaluation shows the [MVP baseline](EXPENSE_CLAIM_MVP_WORKFLOW.md) is unsuitable. Finance has approved-claim metadata access in that baseline; any evidence access needs a separate decision.
 - Select the file scanner, supported isolation boundary, private storage provider/adapter, encryption and key ownership, storage regions, and monitoring owner.
-- Obtain customer/accounting/privacy advice for each deployment's retention period, legal holds, export obligations, and deletion from backups; implement and rehearse a production independent-ledger adapter after selecting storage and recovery boundaries.
+- Evaluate the ledger service, independent signed-checkpoint mechanism, recovery identity, and exact-version purge semantics against the [production recovery design](PRODUCTION_EVIDENCE_RECOVERY_DESIGN.md); implement and rehearse the adapter only after selecting storage and recovery boundaries.
+- Obtain customer/accounting/privacy advice for each deployment's retention period, legal holds, export obligations, and deletion from backups. Do not promise a permanent purge until all provider-managed recoverable copies and their retention windows are accounted for.
 - Verify exact file limits against expected mobile capture conditions and accessibility needs.
 - Agree on support escalation and breach-response steps specifically for evidence objects.
 - Review data-processing terms before enabling OCR, document preview services, email ingestion, or another external processor.
