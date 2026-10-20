@@ -33,6 +33,8 @@ This backlog turns the existing product plan into an implementation sequence. It
 
 **Core HR increment:** Issue #59 adds the first work-only employee directory linked to organization memberships. Issue #87 adds tenant-scoped leave requests and auditable manager decisions. Issue #89 adds organization invitations and account onboarding with constrained roles and single-use links. Issue #91 adds optional SMTP-backed invitation email with a manual-link fallback; mailbox verification remains outside this increment. Leave balances, entitlements, payroll, statutory policy, and sensitive identity records remain outside this increment.
 
+**Inventory increment:** Issue #105 adds an organization-scoped product catalog, stock locations, and append-only receipt, issue, adjustment, and transfer movements with decimal quantities, reason/actor history, negative-stock protection, and idempotent request keys. Quantities are derived from the movement history. Purchasing, reservations, costing, valuation, tax, and accounting are outside this increment; see [Synthetic Inventory Alpha](INVENTORY_ALPHA.md).
+
 ## P3 — Payments and reconciliation
 
 - Begin with explicit manual payment recording and allocation.
