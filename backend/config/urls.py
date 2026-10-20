@@ -55,6 +55,14 @@ from invoicing.views import (
     payment_reverse_view,
     payments_view,
 )
+from inventory.views import (
+    inventory_location_detail_view,
+    inventory_locations_view,
+    inventory_movements_view,
+    inventory_product_detail_view,
+    inventory_products_view,
+    inventory_view,
+)
 
 urlpatterns = [
     path("health/live/", health_live_view, name="health-live"),
@@ -82,6 +90,36 @@ urlpatterns = [
         name="daraja-stk-callback",
     ),
     path("api/organizations/", organizations_view, name="organizations"),
+    path(
+        "api/organizations/<uuid:organization_id>/inventory/",
+        inventory_view,
+        name="inventory",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/inventory/products/",
+        inventory_products_view,
+        name="inventory-products",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/inventory/products/<int:product_id>/",
+        inventory_product_detail_view,
+        name="inventory-product-detail",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/inventory/locations/",
+        inventory_locations_view,
+        name="inventory-locations",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/inventory/locations/<int:location_id>/",
+        inventory_location_detail_view,
+        name="inventory-location-detail",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/inventory/movements/",
+        inventory_movements_view,
+        name="inventory-movements",
+    ),
     path(
         "api/organizations/<uuid:organization_id>/employees/",
         employees_view,

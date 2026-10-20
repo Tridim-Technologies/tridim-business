@@ -4,6 +4,7 @@ import EmployeeDirectory from './EmployeeDirectory'
 import LeaveRequests from './LeaveRequests'
 import OrganizationInvitations from './OrganizationInvitations'
 import InvitationAcceptance from './InvitationAcceptance'
+import Inventory from './Inventory'
 
 type Organization = { id: string; name: string; role: string }
 type Customer = { id: number; name: string; contact_name: string; email: string; phone: string; status: 'active' | 'archived'; status_history: { previous_status: string; status: string; actor: string; created_at: string }[] }
@@ -123,7 +124,7 @@ export default function App() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null)
   const [quoteLines, setQuoteLines] = useState([{ description: '', quantity: '1', unit_price: '' }])
-  const [page, setPage] = useState<'customers' | 'quotations' | 'jobs' | 'expenses' | 'invoices' | 'employees' | 'leave' | 'invitations'>('customers')
+  const [page, setPage] = useState<'customers' | 'quotations' | 'jobs' | 'expenses' | 'inventory' | 'invoices' | 'employees' | 'leave' | 'invitations'>('customers')
   const [invitationToken, setInvitationToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('invite') || '')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -144,6 +145,8 @@ export default function App() {
   const canManageLeave = canManageEmployees
   const canViewLeave = ['owner', 'admin', 'sales', 'operations', 'finance', 'employee'].includes(activeOrg?.role || '')
   const canManageInvitations = ['owner', 'admin'].includes(activeOrg?.role || '')
+  const canViewInventory = ['owner', 'admin', 'operations', 'sales', 'finance'].includes(activeOrg?.role || '')
+  const canManageInventory = ['owner', 'admin', 'operations'].includes(activeOrg?.role || '')
 
   const refreshData = useCallback(async () => {
     if (!organization) return
@@ -542,7 +545,7 @@ export default function App() {
   const canManageCustomers = ['owner', 'admin', 'sales', 'operations'].includes(activeOrg?.role || '')
   const canManageJobs = ['owner', 'admin', 'operations'].includes(activeOrg?.role || '')
   const canWriteJobNotes = canManageJobs || activeOrg?.role === 'employee'
-  const label = page === 'invitations' ? 'Invitations' : page === 'leave' ? 'Leave requests' : page === 'employees' ? 'Employees' : page === 'jobs' ? 'Jobs' : page === 'expenses' ? 'Expenses' : page === 'quotations' ? 'Quotations' : page === 'invoices' ? 'Invoices' : 'Customers'
+  const label = page === 'invitations' ? 'Invitations' : page === 'leave' ? 'Leave requests' : page === 'employees' ? 'Employees' : page === 'jobs' ? 'Jobs' : page === 'expenses' ? 'Expenses' : page === 'inventory' ? 'Inventory' : page === 'quotations' ? 'Quotations' : page === 'invoices' ? 'Invoices' : 'Customers'
   const visibleQuotes = quotations
   const availableExpenseJobs = jobs.filter((job) => job.status !== 'cancelled' && job.assignments.some((assignment) => assignment.user === session.user?.username && !assignment.unassigned_at))
   return <div className="app-shell">
@@ -553,6 +556,7 @@ export default function App() {
         <button className={`nav-item ${page === 'quotations' ? 'active' : ''}`} onClick={() => setPage('quotations')}><span className="nav-icon">↗</span> Quotations</button>
         <button className={`nav-item ${page === 'jobs' ? 'active' : ''}`} onClick={() => setPage('jobs')}><span className="nav-icon">▦</span> Jobs</button>
         <button className={`nav-item ${page === 'expenses' ? 'active' : ''}`} onClick={() => setPage('expenses')}><span className="nav-icon">◇</span> Expenses</button>
+        {canViewInventory && <button className={`nav-item ${page === 'inventory' ? 'active' : ''}`} onClick={() => setPage('inventory')}><span className="nav-icon">▦</span> Inventory</button>}
         {canViewEmployees && <button className={`nav-item ${page === 'employees' ? 'active' : ''}`} onClick={() => setPage('employees')}><span className="nav-icon">♙</span> Employees</button>}
         {canViewLeave && <button className={`nav-item ${page === 'leave' ? 'active' : ''}`} onClick={() => setPage('leave')}><span className="nav-icon">◷</span> Leave</button>}
         {canManageInvitations && <button className={`nav-item ${page === 'invitations' ? 'active' : ''}`} onClick={() => setPage('invitations')}><span className="nav-icon">✉</span> Invitations</button>}
@@ -633,7 +637,7 @@ export default function App() {
               </article>
             })}</div> : <div className="empty-state"><div className="empty-icon">◇</div><strong>No expense claims yet</strong><p>Assigned members can create a draft for a job.</p></div>}
           </section>
-        </> : page === 'invoices' ? <>
+        </> : page === 'inventory' ? <Inventory organization={organization} canManage={canManageInventory} /> : page === 'invoices' ? <>
           <div className="page-heading"><div><p className="eyebrow">FINANCE</p><h1>Invoices</h1><p className="muted">Internal invoice and manual receipt records for completed work. Tax is not calculated.</p></div><span className="count-pill">{invoices.length} {invoices.length === 1 ? 'invoice' : 'invoices'}</span></div>
           {error && <div className="alert inline-alert">{error}</div>}
           <section className="panel export-panel"><div><h2>Finance exports</h2><p>CSV records include an as-of timestamp and status definitions. Reconcile these with your own records.</p></div><div className="export-actions"><a className="quiet-action" href={`/api/organizations/${organization}/exports/invoices.csv`}>Invoices CSV</a><a className="quiet-action" href={`/api/organizations/${organization}/exports/payments.csv`}>Payments CSV</a><a className="quiet-action" href={`/api/organizations/${organization}/exports/allocations.csv`}>Allocations CSV</a></div></section>
