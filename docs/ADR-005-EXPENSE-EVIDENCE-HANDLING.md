@@ -95,6 +95,8 @@ This design does not solve unrelated orphan objects created after a database bac
 
 The implementation-pattern comparison, object-store control evaluation, restore acceptance matrix, and access-enable evidence are maintained in [Production Expense-Evidence Recovery Design](PRODUCTION_EVIDENCE_RECOVERY_DESIGN.md). The preferred architecture for evaluation is an append-only ledger in a separately administered recovery boundary with a separately protected integrity checkpoint. This is a provider-neutral direction only; the provider, region, ledger service, retention policy, and deployment remain undecided. The design distinguishes application inaccessibility from provider-confirmed purge and permanent expiry, since versioning, soft deletion, legal holds, and immutable retention can preserve recoverable bytes after an application delete request.
 
+The current core code defines injectable storage and journal protocols around deletion orchestration and verifies failure ordering with synthetic test doubles. This is an internal seam for local behavior and testing. It does not establish exact-generation deletion, independent checkpointing, remote durability, or any production readiness; provider-specific implementation and restore rehearsal remain gated on the decisions above.
+
 ## Open decisions before implementation or real-data use
 
 - Revisit one-claim-per-expense, reviewer permissions, and the default receipt rule only if workflow evaluation shows the [MVP baseline](EXPENSE_CLAIM_MVP_WORKFLOW.md) is unsuitable. Finance has approved-claim metadata access in that baseline; any evidence access needs a separate decision.

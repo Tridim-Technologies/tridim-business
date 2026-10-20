@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .deletion_ledger import DeletionLedgerError, LocalSyntheticEvidenceDeletionLedger
+from .evidence_adapters import EvidenceDeletionJournal, EvidenceStorage
 from .evidence import PrivateLocalEvidenceStorage
 from .models import ExpenseClaimEvidence, ExpenseEvidenceAuditEvent
 
@@ -50,6 +51,8 @@ def finish_evidence_deletion(
     action,
     completed_outcome=None,
     audit_metadata=None,
+    storage: EvidenceStorage | None = None,
+    journal: EvidenceDeletionJournal | None = None,
 ):
     """Acknowledge intent, purge bytes, record completion, then finalize the row."""
     evidence = (
@@ -66,11 +69,11 @@ def finish_evidence_deletion(
         raise DeletionLedgerError("Evidence must be inaccessible before it is purged.")
 
     metadata = _metadata_for(evidence, reason_code)
-    ledger = LocalSyntheticEvidenceDeletionLedger()
-    storage = PrivateLocalEvidenceStorage()
-    ledger.record_intent(**metadata)
+    journal = journal or LocalSyntheticEvidenceDeletionLedger()
+    storage = storage or PrivateLocalEvidenceStorage()
+    journal.record_intent(**metadata)
     storage.delete(evidence.storage_key)
-    ledger.record_purged(**metadata)
+    journal.record_purged(**metadata)
 
     with transaction.atomic():
         current = (
@@ -132,7 +135,12 @@ def finish_evidence_deletion(
     return True
 
 
-def replay_deletion_intent(intent):
+def replay_deletion_intent(
+    intent,
+    *,
+    storage: EvidenceStorage | None = None,
+    journal: EvidenceDeletionJournal | None = None,
+):
     """Re-purge an intent and tombstone a matching row if an older DB has it."""
     evidence = ExpenseClaimEvidence.objects.filter(pk=intent["evidence_id"]).first()
     if evidence is not None and (
@@ -169,10 +177,10 @@ def replay_deletion_intent(intent):
         "storage_key": intent["storage_key"],
         "reason_code": intent["reason_code"],
     }
-    storage = PrivateLocalEvidenceStorage()
+    storage = storage or PrivateLocalEvidenceStorage()
     storage.delete(intent["storage_key"])
-    ledger = LocalSyntheticEvidenceDeletionLedger()
-    ledger.record_purged(**metadata)
+    journal = journal or LocalSyntheticEvidenceDeletionLedger()
+    journal.record_purged(**metadata)
 
     if evidence is not None:
         with transaction.atomic():

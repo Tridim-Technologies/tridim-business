@@ -1,10 +1,12 @@
 # Production expense-evidence recovery design
 
-**Status:** Design evaluation only; no production provider or adapter is selected
+**Status:** Design evaluation only; provider-neutral orchestration contracts and synthetic failure tests are implemented, but no production provider or adapter is selected
 **Last reviewed:** 20 October 2026
 **Related decisions:** [ADR-005](ADR-005-EXPENSE-EVIDENCE-HANDLING.md), [database backup and restore](DATABASE_BACKUP_AND_RESTORE.md)
 
 This document turns the provider-neutral requirements in ADR-005 into a reviewable production architecture and restore acceptance plan. It does not authorize real evidence, deployment, a cloud account, a retention duration, or spending. The local SQLite journal remains a synthetic-data rehearsal only.
+
+The core application now exposes narrow storage and deletion-journal protocols for deletion orchestration and permits test adapters to be injected. Contract tests exercise intent-write, object-delete, and completion-write failures against synthetic local evidence. These interfaces make the local workflow testable; they do not represent a production adapter contract for exact object generations, independently protected checkpoints, replicas, or backup purge verification. Production remains gated on selecting and rehearsing those controls.
 
 ## Design objective
 
