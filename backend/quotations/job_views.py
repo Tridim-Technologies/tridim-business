@@ -96,6 +96,8 @@ def _jobs_for_member(organization_id, membership, user):
             "status_history__actor",
             "due_date_history__actor",
             "notes__author",
+            "material_issues__actor",
+            "material_issues__lines",
         )
         .order_by("-created_at", "id")
     )

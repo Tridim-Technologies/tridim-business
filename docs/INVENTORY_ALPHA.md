@@ -26,6 +26,12 @@ Quantities use decimal precision of three places. Receipts and increases establi
 
 On-hand quantities are calculated from movement history. Corrections are new compensating movements; existing events are not edited or deleted through the API.
 
+## Issue materials to a job
+
+Owners, administrators, and operations members can record one or more product quantities from active locations against an organization job. Each request has a reason and organization-scoped UUID idempotency key. An accepted request atomically creates an immutable job issue and linked stock issue movements; insufficient stock, inactive or cross-organization products/locations, and a mismatched retry are rejected. The job delivery history shows the recorded materials, and inventory movement history identifies the job.
+
+This records consumption after it occurs. It does not reserve stock, allocate material cost, value inventory, or create invoice or accounting entries.
+
 ## Access
 
 - Owners, administrators, and operations members can create and update products, create locations, and record stock movements.
@@ -43,9 +49,10 @@ On-hand quantities are calculated from movement history. Corrections are new com
 | `/api/organizations/{organization_id}/inventory/locations/` | POST | Create a location |
 | `/api/organizations/{organization_id}/inventory/locations/{location_id}/` | PATCH | Update a location; deactivation requires zero stock |
 | `/api/organizations/{organization_id}/inventory/movements/` | GET, POST | List recent movements or record one movement |
+| `/api/organizations/{organization_id}/jobs/{job_id}/material-issues/` | POST | Record quantity-only stock issue lines against a job |
 
 Movement requests include `product_id`, `kind`, `location_id`, a positive decimal `quantity`, a reason, and a UUID `idempotency_key`. Transfers also require `destination_id`; adjustments require `direction` (`increase` or `decrease`). Quantities should be sent as decimal strings, not floating-point JSON numbers.
 
 ## Scope limits and follow-up
 
-Supplier orders and partial receiving are documented separately in [Supplier orders and stock receiving](PURCHASING_ALPHA.md). Inventory remains quantity-only: it does not implement sales orders, reservations, bundles, serial or batch tracking, unit conversions, costing, valuation, tax, invoice integration, or general-ledger posting. No hosted deployment or real business data is part of this increment.
+Supplier orders and partial receiving are documented separately in [Supplier orders and stock receiving](PURCHASING_ALPHA.md). Job material issue payloads contain `idempotency_key`, `reason`, and `lines`; each line contains `product_id`, `location_id`, and a positive decimal-string `quantity` with three decimal places. Inventory remains quantity-only: it does not implement sales orders, reservations, bundles, serial or batch tracking, unit conversions, costing, valuation, tax, invoice integration, or general-ledger posting. No hosted deployment or real business data is part of this increment.

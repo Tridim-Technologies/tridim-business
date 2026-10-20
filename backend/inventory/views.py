@@ -1,4 +1,6 @@
+import hashlib
 import json
+import uuid
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
@@ -8,11 +10,20 @@ from django.views.decorators.http import require_http_methods
 from rest_framework.exceptions import ValidationError
 
 from accounts.models import Membership, Organization
+from quotations.models import Job
 
-from .models import Location, Product, StockMovement
+from .models import (
+    JobMaterialIssue,
+    JobMaterialIssueLine,
+    Location,
+    Product,
+    StockMovement,
+)
 from .serializers import (
     LocationSerializer,
     LocationWriteSerializer,
+    JobMaterialIssueSerializer,
+    JobMaterialIssueWriteSerializer,
     MovementWriteSerializer,
     ProductSerializer,
     ProductWriteSerializer,
@@ -133,6 +144,7 @@ def inventory_view(request, organization_id):
         "destination",
         "actor",
         "source_receipt_line__receipt__purchase_order",
+        "source_job_material_issue_line__issue__job",
     )[:100]
     return JsonResponse(
         {
@@ -355,6 +367,7 @@ def inventory_movements_view(request, organization_id):
             "destination",
             "actor",
             "source_receipt_line__receipt__purchase_order",
+            "source_job_material_issue_line__issue__job",
         )[:100]
         return JsonResponse(
             {"results": StockMovementSerializer(movements, many=True).data}
@@ -453,5 +466,129 @@ def inventory_movements_view(request, organization_id):
                 {"detail": "Movement request conflicts with existing data."}, status=409
             )
     data = StockMovementSerializer(movement).data
+    data["replayed"] = False
+    return JsonResponse(data, status=201)
+
+
+@require_http_methods(["POST"])
+def job_material_issues_view(request, organization_id, job_id):
+    _, error = _membership(request, organization_id, write=True)
+    if error:
+        return error
+    values, error = _payload(request, JobMaterialIssueWriteSerializer)
+    if error:
+        return error
+    canonical = {
+        "reason": values["reason"],
+        "lines": [
+            {
+                "product_id": line["product_id"],
+                "location_id": line["location_id"],
+                "quantity": format(line["quantity"], "f"),
+            }
+            for line in values["lines"]
+        ],
+    }
+    signature = hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+    with transaction.atomic():
+        Organization.objects.select_for_update().get(pk=organization_id)
+        existing = (
+            JobMaterialIssue.objects.filter(
+                organization_id=organization_id,
+                idempotency_key=values["idempotency_key"],
+            )
+            .prefetch_related("lines")
+            .first()
+        )
+        if existing:
+            if existing.job_id != job_id or existing.request_signature != signature:
+                return JsonResponse(
+                    {
+                        "detail": "Idempotency key was already used for another job issue."
+                    },
+                    status=409,
+                )
+            data = JobMaterialIssueSerializer(existing).data
+            data["replayed"] = True
+            return JsonResponse(data)
+
+        job = (
+            Job.objects.select_for_update()
+            .filter(organization_id=organization_id, pk=job_id)
+            .first()
+        )
+        if job is None:
+            return JsonResponse({"detail": "Job not found."}, status=404)
+        product_ids = [line["product_id"] for line in values["lines"]]
+        products = {
+            product.pk: product
+            for product in Product.objects.select_for_update().filter(
+                organization_id=organization_id, pk__in=product_ids, is_active=True
+            )
+        }
+        if len(products) != len(set(product_ids)):
+            return JsonResponse(
+                {"detail": "One or more active products were not found."}, status=404
+            )
+        location_ids = {line["location_id"] for line in values["lines"]}
+        locations = {
+            location.pk: location
+            for location in Location.objects.filter(
+                organization_id=organization_id, pk__in=location_ids, is_active=True
+            )
+        }
+        if len(locations) != len(location_ids):
+            return JsonResponse(
+                {"detail": "One or more active locations were not found."}, status=404
+            )
+
+        # All stock-changing endpoints lock the organization before evaluating balances.
+        for line in values["lines"]:
+            product = products[line["product_id"]]
+            if _balance(product, line["location_id"]) < line["quantity"]:
+                return JsonResponse(
+                    {"detail": f"Issue would make stock negative for {product.sku}."},
+                    status=409,
+                )
+
+        issue = JobMaterialIssue.objects.create(
+            organization_id=organization_id,
+            job=job,
+            actor=request.user,
+            idempotency_key=values["idempotency_key"],
+            request_signature=signature,
+            reason=values["reason"],
+        )
+        for index, line in enumerate(values["lines"]):
+            product = products[line["product_id"]]
+            location = locations[line["location_id"]]
+            issue_line = JobMaterialIssueLine.objects.create(
+                issue=issue,
+                product=product,
+                location=location,
+                product_sku=product.sku,
+                product_name=product.name,
+                base_unit=product.base_unit,
+                location_code=location.code,
+                quantity=line["quantity"],
+            )
+            StockMovement.objects.create(
+                organization_id=organization_id,
+                product=product,
+                kind=StockMovement.Kind.ISSUE,
+                location=location,
+                quantity=line["quantity"],
+                reason=f"Job #{job.pk}: {values['reason']}"[:500],
+                idempotency_key=uuid.uuid5(values["idempotency_key"], str(index)),
+                actor=request.user,
+                source_job_material_issue_line=issue_line,
+            )
+
+    data = JobMaterialIssueSerializer(
+        JobMaterialIssue.objects.prefetch_related("lines").get(pk=issue.pk)
+    ).data
     data["replayed"] = False
     return JsonResponse(data, status=201)

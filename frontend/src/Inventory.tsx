@@ -22,6 +22,7 @@ type Movement = {
   destination_id: number | null
   destination_code: string | null
   supplier_order_reference: string | null
+  job_id: number | null
   direction: 'increase' | 'decrease' | ''
   quantity: string
   reason: string
@@ -189,7 +190,7 @@ export default function Inventory({ organization, canManage }: { organization: s
       </form>
     </section>}
     <section className="panel inventory-register"><div className="panel-heading"><div><h2>Recent movements</h2><p>Most recent 100 movements, newest first. Records cannot be edited or deleted.</p></div></div>
-      {data.movements.length ? <div className="expense-list">{data.movements.map((movement) => <article className="expense-card" key={movement.id}><div className="invoice-top"><div><strong>{movement.kind.replace('_', ' ')} · {movement.product_sku}</strong><span className="quote-id">{movement.supplier_order_reference ? `${movement.supplier_order_reference} · ` : ''}{movement.location_code}{movement.destination_code ? ` → ${movement.destination_code}` : ''} · {movement.quantity} · {movement.actor} · {new Date(movement.created_at).toLocaleString()}</span></div></div><p>{movement.reason}{movement.kind === 'adjustment' ? ` · ${movement.direction}` : ''}</p></article>)}</div> : <div className="empty-state"><strong>No stock movements yet</strong><p>Receive or adjust stock to establish the first on-hand quantity.</p></div>}
+      {data.movements.length ? <div className="expense-list">{data.movements.map((movement) => <article className="expense-card" key={movement.id}><div className="invoice-top"><div><strong>{movement.kind.replace('_', ' ')} · {movement.product_sku}</strong><span className="quote-id">{movement.supplier_order_reference ? `${movement.supplier_order_reference} · ` : movement.job_id ? `Job #${movement.job_id} · ` : ''}{movement.location_code}{movement.destination_code ? ` → ${movement.destination_code}` : ''} · {movement.quantity} · {movement.actor} · {new Date(movement.created_at).toLocaleString()}</span></div></div><p>{movement.reason}{movement.kind === 'adjustment' ? ` · ${movement.direction}` : ''}</p></article>)}</div> : <div className="empty-state"><strong>No stock movements yet</strong><p>Receive or adjust stock to establish the first on-hand quantity.</p></div>}
     </section>
   </>
 }

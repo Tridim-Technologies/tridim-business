@@ -99,6 +99,13 @@ class StockMovement(models.Model):
         null=True,
         blank=True,
     )
+    source_job_material_issue_line = models.OneToOneField(
+        "inventory.JobMaterialIssueLine",
+        on_delete=models.PROTECT,
+        related_name="stock_movement",
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -132,4 +139,57 @@ class StockMovement(models.Model):
                 ),
                 name="inventory_movement_shape_valid",
             ),
+        ]
+
+
+class JobMaterialIssue(models.Model):
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="job_material_issues"
+    )
+    job = models.ForeignKey(
+        "quotations.Job", on_delete=models.PROTECT, related_name="material_issues"
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="job_material_issues",
+    )
+    idempotency_key = models.UUIDField()
+    request_signature = models.CharField(max_length=64)
+    reason = models.CharField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "idempotency_key"],
+                name="job_material_issue_request_uniq",
+            )
+        ]
+
+
+class JobMaterialIssueLine(models.Model):
+    issue = models.ForeignKey(
+        JobMaterialIssue, on_delete=models.CASCADE, related_name="lines"
+    )
+    product = models.ForeignKey(
+        Product, on_delete=models.PROTECT, related_name="job_material_issue_lines"
+    )
+    location = models.ForeignKey(
+        Location, on_delete=models.PROTECT, related_name="job_material_issue_lines"
+    )
+    product_sku = models.CharField(max_length=64)
+    product_name = models.CharField(max_length=160)
+    base_unit = models.CharField(max_length=16)
+    location_code = models.CharField(max_length=32)
+    quantity = models.DecimalField(max_digits=18, decimal_places=3)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0), name="job_material_qty_positive"
+            )
         ]

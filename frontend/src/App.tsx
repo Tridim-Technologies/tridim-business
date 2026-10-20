@@ -6,6 +6,7 @@ import OrganizationInvitations from './OrganizationInvitations'
 import InvitationAcceptance from './InvitationAcceptance'
 import Inventory from './Inventory'
 import Purchasing from './Purchasing'
+import JobMaterials from './JobMaterials'
 
 type Organization = { id: string; name: string; role: string }
 type Customer = { id: number; name: string; contact_name: string; email: string; phone: string; status: 'active' | 'archived'; status_history: { previous_status: string; status: string; actor: string; created_at: string }[] }
@@ -21,6 +22,7 @@ type Job = {
   due_date_history: { previous_due_date: string | null; due_date: string | null; actor: string; created_at: string }[]
   assignments: { id: number; user: string; assigned_by: string; assigned_at: string; unassigned_by: string | null; unassigned_at: string | null }[]
   notes: { id: number; author: string; content: string; created_at: string }[]; created_at: string
+  material_issues: { id: number; job_id: number; reason: string; actor: string; created_at: string; lines: { id: number; product_sku: string; product_name: string; base_unit: string; location_code: string; quantity: string }[] }[]
 }
 type TimeEntry = {
   id: number; employee: string; work_date: string; hours: string; description: string
@@ -734,6 +736,7 @@ export default function App() {
                 </section>}
                 {(job.status_history.length > 0 || job.due_date_history.length > 0 || job.assignments.length > activeAssignments.length) && <details className="job-history"><summary>View delivery history</summary>{job.status_history.map((entry, index) => <div key={`status-${index}`}>{entry.previous_status || 'created'} → {entry.status} · {entry.actor} · {new Date(entry.created_at).toLocaleString()}{entry.note ? ` · ${entry.note}` : ''}</div>)}{job.due_date_history.map((entry, index) => <div key={`date-${index}`}>Due date {entry.previous_due_date || 'unset'} → {entry.due_date || 'unset'} · {entry.actor} · {new Date(entry.created_at).toLocaleString()}</div>)}{job.assignments.filter((assignment) => assignment.unassigned_at).map((assignment) => <div key={`assignment-${assignment.id}`}>{assignment.user} assigned by {assignment.assigned_by} · unassigned by {assignment.unassigned_by} · {new Date(assignment.unassigned_at!).toLocaleString()}</div>)}</details>}
                 <div className="job-notes"><h3>Delivery notes</h3>{job.notes.map((note) => <div className="job-note" key={note.id}><p>{note.content}</p><span>{note.author} · {new Date(note.created_at).toLocaleString()}</span></div>)}{canWriteJobNotes && <form className="job-note-form" onSubmit={(event) => addJobNote(event, job)}><textarea name="content" placeholder="Add a delivery update" maxLength={2000} required /><button className="primary" disabled={saving}>Add note <span>＋</span></button></form>}</div>
+                <JobMaterials organization={organization} jobId={job.id} issues={job.material_issues} canManage={canManageJobs} saving={saving} onSaved={refreshData} />
               </article>
             })}</div> : <div className="empty-state"><div className="empty-icon">▦</div><strong>No jobs yet</strong><p>When your organization accepts a quotation, the linked job will appear here for delivery tracking.</p></div>}
           </section>

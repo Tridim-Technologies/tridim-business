@@ -2,7 +2,13 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from .models import Location, Product, StockMovement
+from .models import (
+    JobMaterialIssue,
+    JobMaterialIssueLine,
+    Location,
+    Product,
+    StockMovement,
+)
 
 
 class StrictSerializer(serializers.Serializer):
@@ -92,6 +98,72 @@ class MovementWriteSerializer(StrictSerializer):
         return attrs
 
 
+class JobMaterialIssueLineWriteSerializer(StrictSerializer):
+    product_id = serializers.IntegerField(min_value=1)
+    location_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(
+        max_digits=18, decimal_places=3, min_value=Decimal("0.001")
+    )
+
+
+class JobMaterialIssueWriteSerializer(StrictSerializer):
+    idempotency_key = serializers.UUIDField()
+    reason = serializers.CharField(max_length=500, min_length=3, trim_whitespace=True)
+    lines = JobMaterialIssueLineWriteSerializer(
+        many=True, allow_empty=False, max_length=100
+    )
+
+    def validate_lines(self, lines):
+        raw_lines = self.initial_data.get("lines", [])
+        if any(
+            isinstance(raw.get("quantity"), float)
+            for raw in raw_lines
+            if isinstance(raw, dict)
+        ):
+            raise serializers.ValidationError(
+                "Send quantity as an exact decimal string."
+            )
+        pairs = [(line["product_id"], line["location_id"]) for line in lines]
+        if len(pairs) != len(set(pairs)):
+            raise serializers.ValidationError(
+                "A product and location may appear only once per issue."
+            )
+        return lines
+
+
+class JobMaterialIssueLineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JobMaterialIssueLine
+        fields = (
+            "id",
+            "product_id",
+            "product_sku",
+            "product_name",
+            "base_unit",
+            "location_id",
+            "location_code",
+            "quantity",
+            "created_at",
+        )
+
+
+class JobMaterialIssueSerializer(serializers.ModelSerializer):
+    actor = serializers.CharField(source="actor.get_username", read_only=True)
+    lines = JobMaterialIssueLineSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = JobMaterialIssue
+        fields = (
+            "id",
+            "job_id",
+            "reason",
+            "actor",
+            "idempotency_key",
+            "created_at",
+            "lines",
+        )
+
+
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
@@ -119,6 +191,11 @@ class StockMovementSerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True,
     )
+    job_id = serializers.IntegerField(
+        source="source_job_material_issue_line.issue.job_id",
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model = StockMovement
@@ -133,6 +210,7 @@ class StockMovementSerializer(serializers.ModelSerializer):
             "destination_id",
             "destination_code",
             "supplier_order_reference",
+            "job_id",
             "direction",
             "quantity",
             "reason",
