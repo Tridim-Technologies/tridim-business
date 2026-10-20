@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v0.21.0 (2026-10-20)
+
+### Documentation
+
+- **recovery**: Evaluate production evidence design
+  ([#102](https://github.com/Tridim-Technologies/tridim-business/pull/102),
+  [`c82c0e6`](https://github.com/Tridim-Technologies/tridim-business/commit/c82c0e605950f2c70fed1da3bbb5c11ecb414579))
+
+### Features
+
+- **evidence**: Define adapter contracts and failure tests
+  ([`6c5fe93`](https://github.com/Tridim-Technologies/tridim-business/commit/6c5fe93aedfe6d6f7df5c789facd5f2ff5b4f2b6))
+
+
 ## v0.20.0 (2026-10-19)
 
 ### Documentation
