@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.23.0 (2026-10-20)
+
+### Features
+
+- **purchasing**: Add supplier orders and stock receiving
+  ([#108](https://github.com/Tridim-Technologies/tridim-business/pull/108),
+  [`3e3b02a`](https://github.com/Tridim-Technologies/tridim-business/commit/3e3b02a51421af3b724ee22d81574e5d6cffab9f))
+
+
 ## v0.22.0 (2026-10-20)
 
 ### Features
