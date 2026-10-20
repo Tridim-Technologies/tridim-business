@@ -14,10 +14,11 @@ This repository contains the internal alpha foundation and planning documents. S
 4. Review [`docs/ADR-001-FOUNDATION.md`](docs/ADR-001-FOUNDATION.md) for the accepted initial platform decision.
 5. Read [`docs/DARAJA_SANDBOX.md`](docs/DARAJA_SANDBOX.md) before configuring the sandbox M-Pesa Express flow.
 6. Review [`docs/DATABASE_BACKUP_AND_RESTORE.md`](docs/DATABASE_BACKUP_AND_RESTORE.md) for the PostgreSQL recovery runbook and local synthetic rehearsal.
-7. Open [`prototype/job-to-cash/index.html`](prototype/job-to-cash/index.html) for the sample workflow concept.
-8. Read [`docs/EXPENSE_CLAIM_ALPHA.md`](docs/EXPENSE_CLAIM_ALPHA.md) for the synthetic expense claim API and UI.
-9. Read [`docs/EMPLOYEE_LEAVE_REQUESTS.md`](docs/EMPLOYEE_LEAVE_REQUESTS.md) for leave request roles, states, privacy boundaries, and API routes.
-10. Read [`docs/ORGANIZATION_INVITATIONS.md`](docs/ORGANIZATION_INVITATIONS.md) for invite creation, role limits, signup, and acceptance behavior.
+7. Review [`docs/PRODUCTION_EVIDENCE_RECOVERY_DESIGN.md`](docs/PRODUCTION_EVIDENCE_RECOVERY_DESIGN.md) for the unselected production evidence-ledger design and restore acceptance criteria.
+8. Open [`prototype/job-to-cash/index.html`](prototype/job-to-cash/index.html) for the sample workflow concept.
+9. Read [`docs/EXPENSE_CLAIM_ALPHA.md`](docs/EXPENSE_CLAIM_ALPHA.md) for the synthetic expense claim API and UI.
+10. Read [`docs/EMPLOYEE_LEAVE_REQUESTS.md`](docs/EMPLOYEE_LEAVE_REQUESTS.md) for leave request roles, states, privacy boundaries, and API routes.
+11. Read [`docs/ORGANIZATION_INVITATIONS.md`](docs/ORGANIZATION_INVITATIONS.md) for invite creation, role limits, signup, and acceptance behavior.
 
 ## Scope
 

@@ -21,6 +21,7 @@ These targets apply to internal-alpha planning, not customer-facing service guar
 | Database/project and region | Not selected; hosted deployment is deferred; see [ADR-004](ADR-004-HOSTING-AND-PAYMENT-ACCOUNTS.md) |
 | Hosted RPO/RTO configuration and measured performance | Not configured or verified |
 | Hosted backup/PITR retention | Not configured; validate whether it can support the seven-day planning window |
+| Production evidence ledger/checkpoint and object purge behavior | Design criteria documented; service, storage, region, recovery identities, and retention rules not selected |
 | Alert route and delivery verification | Not configured; see [Monitoring and Incident Response](MONITORING_AND_INCIDENT_RESPONSE.md#operational-readiness) |
 | Backup encryption and key/access policy | Must be confirmed for the chosen storage and deployment |
 
@@ -83,6 +84,8 @@ Provision the password file through the approved secret process; do not paste an
 Cloud SQL automated backups and PITR configuration are deployment work, not created by this repository. The [Cloud SQL backup overview](https://docs.cloud.google.com/sql/docs/postgres/backup-recovery/backups) and [PITR configuration guide](https://docs.cloud.google.com/sql/docs/postgres/backup-recovery/configure-pitr) describe the provider controls. Select a retention window and log-storage setting only after the recovery targets, region, cost, and residency requirements are agreed.
 
 The local synthetic replay command keeps the evidence feature disabled while it verifies and replays its separate SQLite journal. It is rehearsal code only; the journal and its checkpoint can be rolled back or lost alongside local files and do not meet the independent production recovery boundary in [ADR-005](ADR-005-EXPENSE-EVIDENCE-HANDLING.md#independent-deletion-ledger-design). A future production gate must also reapply tombstones for rows present in the restored database, purge exact object versions when a row is absent, and resolve failed deletes, object versions/replicas, and unrelated storage orphans before access is enabled.
+
+The production restore protocol and rehearsal acceptance matrix are in [Production Expense-Evidence Recovery Design](PRODUCTION_EVIDENCE_RECOVERY_DESIGN.md). Keep all evidence operations disabled until an independently protected checkpoint is verified, every relevant intent is replayed through the approved recovery barrier, and storage inventory proves the exact deleted generations and any versions, replicas, soft-deleted copies, derivatives, or snapshots are handled. A provider's versioning, soft delete, or retention lock is a separate control from permanent purge and must be included in the deletion promise and recovery horizon. The provider, region, retention duration, and deployment remain undecided; this runbook does not configure them.
 
 ## Local synthetic rehearsal
 
