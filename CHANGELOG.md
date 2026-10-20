@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.22.0 (2026-10-20)
+
+### Features
+
+- **inventory**: Add tenant-scoped stock tracking
+  ([#106](https://github.com/Tridim-Technologies/tridim-business/pull/106),
+  [`315a8ba`](https://github.com/Tridim-Technologies/tridim-business/commit/315a8ba654dba69a487a502e0450fbee7b51a5b2))
+
+
 ## v0.21.0 (2026-10-20)
 
 ### Documentation
