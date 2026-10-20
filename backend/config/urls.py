@@ -63,6 +63,16 @@ from inventory.views import (
     inventory_products_view,
     inventory_view,
 )
+from purchasing.views import (
+    purchase_order_cancel_view,
+    purchase_order_detail_view,
+    purchase_order_issue_view,
+    purchase_order_receipts_view,
+    purchase_orders_view,
+    purchasing_view,
+    supplier_detail_view,
+    suppliers_view,
+)
 
 urlpatterns = [
     path("health/live/", health_live_view, name="health-live"),
@@ -119,6 +129,46 @@ urlpatterns = [
         "api/organizations/<uuid:organization_id>/inventory/movements/",
         inventory_movements_view,
         name="inventory-movements",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/purchasing/",
+        purchasing_view,
+        name="purchasing",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/purchasing/suppliers/",
+        suppliers_view,
+        name="purchasing-suppliers",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/purchasing/suppliers/<int:supplier_id>/",
+        supplier_detail_view,
+        name="purchasing-supplier-detail",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/purchasing/orders/",
+        purchase_orders_view,
+        name="purchase-orders",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/purchasing/orders/<int:order_id>/",
+        purchase_order_detail_view,
+        name="purchase-order-detail",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/purchasing/orders/<int:order_id>/issue/",
+        purchase_order_issue_view,
+        name="purchase-order-issue",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/purchasing/orders/<int:order_id>/cancel/",
+        purchase_order_cancel_view,
+        name="purchase-order-cancel",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/purchasing/orders/<int:order_id>/receipts/",
+        purchase_order_receipts_view,
+        name="purchase-order-receipts",
     ),
     path(
         "api/organizations/<uuid:organization_id>/employees/",

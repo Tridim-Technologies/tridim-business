@@ -114,6 +114,11 @@ class StockMovementSerializer(serializers.ModelSerializer):
     destination_code = serializers.CharField(
         source="destination.code", read_only=True, allow_null=True
     )
+    supplier_order_reference = serializers.CharField(
+        source="source_receipt_line.receipt.purchase_order.reference",
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model = StockMovement
@@ -127,6 +132,7 @@ class StockMovementSerializer(serializers.ModelSerializer):
             "location_code",
             "destination_id",
             "destination_code",
+            "supplier_order_reference",
             "direction",
             "quantity",
             "reason",

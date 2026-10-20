@@ -127,7 +127,13 @@ def inventory_view(request, organization_id):
         ]
     movements = StockMovement.objects.filter(
         organization_id=organization_id
-    ).select_related("product", "location", "destination", "actor")[:100]
+    ).select_related(
+        "product",
+        "location",
+        "destination",
+        "actor",
+        "source_receipt_line__receipt__purchase_order",
+    )[:100]
     return JsonResponse(
         {
             "products": product_data,
@@ -173,6 +179,7 @@ def inventory_product_detail_view(request, organization_id, product_id):
     if not values:
         return JsonResponse({"detail": "Provide product fields to update."}, status=400)
     with transaction.atomic():
+        Organization.objects.select_for_update().get(pk=organization_id)
         product = (
             Product.objects.select_for_update()
             .filter(organization_id=organization_id, pk=product_id)
@@ -194,12 +201,15 @@ def inventory_product_detail_view(request, organization_id, product_id):
         if (
             "base_unit" in values
             and values["base_unit"] != product.base_unit
-            and product.stock_movements.exists()
+            and (
+                product.stock_movements.exists()
+                or product.purchase_order_lines.exists()
+            )
         ):
             return JsonResponse(
                 {
                     "base_unit": [
-                        "A product's unit cannot change after stock movements exist."
+                        "A product's unit cannot change after stock movements or supplier order lines exist."
                     ]
                 },
                 status=409,
@@ -339,7 +349,13 @@ def inventory_movements_view(request, organization_id):
     if request.method == "GET":
         movements = StockMovement.objects.filter(
             organization_id=organization_id
-        ).select_related("product", "location", "destination", "actor")[:100]
+        ).select_related(
+            "product",
+            "location",
+            "destination",
+            "actor",
+            "source_receipt_line__receipt__purchase_order",
+        )[:100]
         return JsonResponse(
             {"results": StockMovementSerializer(movements, many=True).data}
         )
