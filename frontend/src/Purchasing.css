@@ -1,0 +1,171 @@
+.purchasing-setup-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.purchasing-supplier-list,
+.purchasing-order-list {
+  display: grid;
+  gap: 12px;
+}
+
+.purchasing-supplier-list {
+  margin-top: 18px;
+}
+
+.purchasing-supplier-list details,
+.purchasing-actions details,
+.purchasing-receipt-history {
+  border-top: 1px solid var(--border, #dce3ec);
+  padding-top: 12px;
+}
+
+.purchasing-supplier-list summary,
+.purchasing-actions summary,
+.purchasing-receipt-history summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.purchasing-order-list {
+  margin-top: 18px;
+}
+
+.purchasing-order-card {
+  display: grid;
+  gap: 16px;
+}
+
+.purchasing-order-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.purchasing-order-heading h2 {
+  margin: 0;
+}
+
+.purchasing-order-heading .eyebrow {
+  margin: 0 0 6px;
+}
+
+.purchasing-status {
+  flex: none;
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #244465;
+  background: #edf4fa;
+  font-size: 0.82rem;
+  font-weight: 650;
+  text-transform: capitalize;
+}
+
+.purchasing-status.status-received {
+  color: #146c43;
+  background: #e7f5ed;
+}
+
+.purchasing-status.status-cancelled {
+  color: #6b7280;
+  background: #f0f1f3;
+}
+
+.purchasing-order-form {
+  margin-top: 12px;
+}
+
+.purchasing-lines {
+  display: grid;
+  gap: 10px;
+}
+
+.purchasing-line-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.45fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.purchasing-actions,
+.purchasing-receive-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.purchasing-actions details {
+  flex: 1 1 100%;
+}
+
+.purchasing-receive-grid {
+  align-items: flex-start;
+  border-top: 1px solid var(--border, #dce3ec);
+  padding-top: 16px;
+}
+
+.purchasing-receive-form {
+  flex: 1 1 420px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+}
+
+.purchasing-receive-form h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.purchasing-receive-form > label:first-of-type {
+  grid-column: 1 / -1;
+}
+
+.purchasing-receive-form button {
+  align-self: end;
+}
+
+.purchasing-receipt-history {
+  display: grid;
+  gap: 10px;
+}
+
+.purchasing-receipt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border, #dce3ec);
+  padding: 10px 0;
+  font-size: 0.9rem;
+}
+
+.align-start {
+  align-self: flex-start;
+}
+
+@media (max-width: 900px) {
+  .purchasing-setup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .purchasing-order-heading,
+  .purchasing-receipt-row {
+    flex-direction: column;
+  }
+
+  .purchasing-line-input,
+  .purchasing-receive-form {
+    grid-template-columns: 1fr;
+  }
+
+  .purchasing-receive-form h3,
+  .purchasing-receive-form > label:first-of-type {
+    grid-column: auto;
+  }
+}

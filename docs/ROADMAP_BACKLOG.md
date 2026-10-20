@@ -35,6 +35,8 @@ This backlog turns the existing product plan into an implementation sequence. It
 
 **Inventory increment:** Issue #105 adds an organization-scoped product catalog, stock locations, and append-only receipt, issue, adjustment, and transfer movements with decimal quantities, reason/actor history, negative-stock protection, and idempotent request keys. Quantities are derived from the movement history. Purchasing, reservations, costing, valuation, tax, and accounting are outside this increment; see [Synthetic Inventory Alpha](INVENTORY_ALPHA.md).
 
+**Supplier purchasing increment:** Issue #107 adds tenant-scoped suppliers, draft/issued/cancelled supplier orders, and idempotent partial/full receiving linked atomically to inventory movements. Order history snapshots supplier and product identifiers; received quantities derive from immutable receipt lines. Prices, currency, payables, payment, tax, approval chains, and accounting remain outside this increment; see [Supplier orders and stock receiving](PURCHASING_ALPHA.md).
+
 ## P3 — Payments and reconciliation
 
 - Begin with explicit manual payment recording and allocation.

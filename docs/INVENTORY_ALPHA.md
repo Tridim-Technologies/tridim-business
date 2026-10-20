@@ -48,4 +48,4 @@ Movement requests include `product_id`, `kind`, `location_id`, a positive decima
 
 ## Scope limits and follow-up
 
-This is quantity tracking, not full inventory accounting. It does not implement purchasing, receiving against supplier orders, sales orders, reservations, bundles, serial or batch tracking, unit conversions, costing, valuation, tax, invoice integration, or general-ledger posting. These need separate requirements and decisions. No hosted deployment or real business data is part of this increment.
+Supplier orders and partial receiving are documented separately in [Supplier orders and stock receiving](PURCHASING_ALPHA.md). Inventory remains quantity-only: it does not implement sales orders, reservations, bundles, serial or batch tracking, unit conversions, costing, valuation, tax, invoice integration, or general-ledger posting. No hosted deployment or real business data is part of this increment.

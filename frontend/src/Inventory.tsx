@@ -21,6 +21,7 @@ type Movement = {
   location_code: string
   destination_id: number | null
   destination_code: string | null
+  supplier_order_reference: string | null
   direction: 'increase' | 'decrease' | ''
   quantity: string
   reason: string
@@ -162,7 +163,7 @@ export default function Inventory({ organization, canManage }: { organization: s
   return <>
     <div className="page-heading"><div><p className="eyebrow">OPERATIONS</p><h1>Inventory</h1><p className="muted">Track product quantities across locations through recorded stock movements.</p></div><span className="count-pill">{data.products.length} {data.products.length === 1 ? 'product' : 'products'}</span></div>
     {error && <div className="alert inline-alert">{error}</div>}
-    <p className="expense-notice">Synthetic product and quantity tracking only. Stock movements do not calculate value, taxes, accounting entries, purchasing, or sales orders.</p>
+    <p className="expense-notice">Synthetic product and quantity tracking only. Stock movements do not calculate value, taxes, accounting entries, or sales orders.</p>
     {canManage && <div className="inventory-setup-grid">
       <section className="panel add-panel"><div className="panel-heading"><div><h2>Add a product</h2><p>SKU is unique within this organization. Price and tax are not captured.</p></div></div>
         <form className="stack-form" onSubmit={createProduct}><label>SKU<input name="sku" maxLength={64} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" required /></label><label>Product name<input name="name" minLength={2} maxLength={160} required /></label><label>Base unit<input name="base_unit" placeholder="ea, kg, l" maxLength={16} pattern="[A-Za-z0-9._-]{1,16}" required /></label><button className="primary" disabled={saving}>Add product <span>＋</span></button></form>
@@ -188,7 +189,7 @@ export default function Inventory({ organization, canManage }: { organization: s
       </form>
     </section>}
     <section className="panel inventory-register"><div className="panel-heading"><div><h2>Recent movements</h2><p>Most recent 100 movements, newest first. Records cannot be edited or deleted.</p></div></div>
-      {data.movements.length ? <div className="expense-list">{data.movements.map((movement) => <article className="expense-card" key={movement.id}><div className="invoice-top"><div><strong>{movement.kind.replace('_', ' ')} · {movement.product_sku}</strong><span className="quote-id">{movement.location_code}{movement.destination_code ? ` → ${movement.destination_code}` : ''} · {movement.quantity} · {movement.actor} · {new Date(movement.created_at).toLocaleString()}</span></div></div><p>{movement.reason}{movement.kind === 'adjustment' ? ` · ${movement.direction}` : ''}</p></article>)}</div> : <div className="empty-state"><strong>No stock movements yet</strong><p>Receive or adjust stock to establish the first on-hand quantity.</p></div>}
+      {data.movements.length ? <div className="expense-list">{data.movements.map((movement) => <article className="expense-card" key={movement.id}><div className="invoice-top"><div><strong>{movement.kind.replace('_', ' ')} · {movement.product_sku}</strong><span className="quote-id">{movement.supplier_order_reference ? `${movement.supplier_order_reference} · ` : ''}{movement.location_code}{movement.destination_code ? ` → ${movement.destination_code}` : ''} · {movement.quantity} · {movement.actor} · {new Date(movement.created_at).toLocaleString()}</span></div></div><p>{movement.reason}{movement.kind === 'adjustment' ? ` · ${movement.direction}` : ''}</p></article>)}</div> : <div className="empty-state"><strong>No stock movements yet</strong><p>Receive or adjust stock to establish the first on-hand quantity.</p></div>}
     </section>
   </>
 }
