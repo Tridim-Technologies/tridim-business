@@ -12,6 +12,7 @@ from .models import (
     JobTimeEntry,
     JobTimeEntryHistory,
 )
+from inventory.serializers import JobMaterialIssueSerializer
 
 
 class JobStatusHistorySerializer(serializers.ModelSerializer):
@@ -66,6 +67,7 @@ class JobSerializer(serializers.ModelSerializer):
     due_date_history = JobDueDateHistorySerializer(many=True, read_only=True)
     assignments = JobAssignmentSerializer(many=True, read_only=True)
     notes = JobNoteSerializer(many=True, read_only=True)
+    material_issues = JobMaterialIssueSerializer(many=True, read_only=True)
 
     class Meta:
         model = Job
@@ -80,6 +82,7 @@ class JobSerializer(serializers.ModelSerializer):
             "due_date_history",
             "assignments",
             "notes",
+            "material_issues",
             "created_at",
         )
         read_only_fields = fields

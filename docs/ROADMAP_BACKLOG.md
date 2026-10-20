@@ -37,6 +37,8 @@ This backlog turns the existing product plan into an implementation sequence. It
 
 **Supplier purchasing increment:** Issue #107 adds tenant-scoped suppliers, draft/issued/cancelled supplier orders, and idempotent partial/full receiving linked atomically to inventory movements. Order history snapshots supplier and product identifiers; received quantities derive from immutable receipt lines. Prices, currency, payables, payment, tax, approval chains, and accounting remain outside this increment; see [Supplier orders and stock receiving](PURCHASING_ALPHA.md).
 
+**Job material usage increment:** Issue #109 records quantity-only stock issues against organization jobs. Immutable job issue history links to inventory movements and is visible from the job and inventory views. Stock is reduced immediately; reservations, costing, valuation, invoicing, and accounting are not included. See [Synthetic Inventory Alpha](INVENTORY_ALPHA.md).
+
 ## P3 — Payments and reconciliation
 
 - Begin with explicit manual payment recording and allocation.
