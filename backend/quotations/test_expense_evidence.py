@@ -26,7 +26,8 @@ from .deletion_ledger import (
     DeletionLedgerError,
     LocalSyntheticEvidenceDeletionLedger,
 )
-from .evidence_deletion import mark_deletion_pending
+from .evidence_adapters import EvidenceDeletionJournal, EvidenceStorage
+from .evidence_deletion import finish_evidence_deletion, mark_deletion_pending
 from .models import (
     ExpenseClaim,
     ExpenseClaimEvidence,
@@ -36,6 +37,52 @@ from .models import (
     Quotation,
 )
 from .evidence import EvidenceError, PrivateLocalEvidenceStorage
+
+
+class _FailureInjectionStorage:
+    def __init__(self, delegate=None, *, fail_delete=False):
+        self.calls = []
+        self.fail_delete = fail_delete
+        self.delegate = delegate
+
+    def put(self, content):
+        self.calls.append(("put", content))
+        return "synthetic-key"
+
+    def get(self, key):
+        self.calls.append(("get", key))
+        return self.delegate.get(key) if self.delegate else b"synthetic"
+
+    def delete(self, key):
+        self.calls.append(("delete", key))
+        if self.fail_delete:
+            raise OSError("injected storage failure")
+        if self.delegate:
+            self.delegate.delete(key)
+
+    def exists(self, key):
+        self.calls.append(("exists", key))
+        return self.delegate.exists(key) if self.delegate else True
+
+
+class _FailureInjectionJournal:
+    def __init__(self, *, fail_intent=False, fail_purged=False):
+        self.calls = []
+        self.fail_intent = fail_intent
+        self.fail_purged = fail_purged
+
+    def record_intent(self, **metadata):
+        self.calls.append(("intent", metadata))
+        if self.fail_intent:
+            raise DeletionLedgerError("injected journal intent failure")
+
+    def record_purged(self, **metadata):
+        self.calls.append(("purged", metadata))
+        if self.fail_purged:
+            raise DeletionLedgerError("injected journal completion failure")
+
+    def intents(self):
+        return []
 
 
 @override_settings(DEBUG=True, EXPENSE_EVIDENCE_LOCAL_HOSTS_ALLOWED=True)
@@ -453,6 +500,90 @@ class ExpenseEvidenceTests(TestCase):
         evidence = ExpenseClaimEvidence.objects.get(pk=response.json()["id"])
         path = Path(self.storage.name) / f"{evidence.storage_key}.evidence"
         return evidence, path
+
+    @override_settings(
+        DEBUG=True,
+        EXPENSE_EVIDENCE_ENABLED=True,
+        EXPENSE_EVIDENCE_STORAGE_ROOT="",
+    )
+    @patch("quotations.evidence_views.ClamAVUnixScanner.scan", return_value=True)
+    def test_deletion_adapter_contract_and_failure_injection(self, _scan):
+        self.assertIsInstance(PrivateLocalEvidenceStorage(), EvidenceStorage)
+        self.assertIsInstance(
+            LocalSyntheticEvidenceDeletionLedger(), EvidenceDeletionJournal
+        )
+
+        with override_settings(EXPENSE_EVIDENCE_STORAGE_ROOT=self.storage.name):
+            evidence, path = self.upload_accepted_evidence()
+            mark_deletion_pending(
+                evidence,
+                action=ExpenseEvidenceAuditEvent.Action.DELETE,
+                reason_code="synthetic_contract_test",
+            )
+
+            storage = _FailureInjectionStorage(PrivateLocalEvidenceStorage())
+            journal = _FailureInjectionJournal(fail_intent=True)
+            with self.assertRaises(DeletionLedgerError):
+                finish_evidence_deletion(
+                    evidence.pk,
+                    reason_code="synthetic_contract_test",
+                    action=ExpenseEvidenceAuditEvent.Action.DELETE,
+                    storage=storage,
+                    journal=journal,
+                )
+            self.assertEqual(storage.calls, [])
+            self.assertEqual([name for name, _ in journal.calls], ["intent"])
+            self.assertTrue(path.exists())
+
+            storage = _FailureInjectionStorage(
+                PrivateLocalEvidenceStorage(), fail_delete=True
+            )
+            journal = _FailureInjectionJournal()
+            with self.assertRaises(OSError):
+                finish_evidence_deletion(
+                    evidence.pk,
+                    reason_code="synthetic_contract_test",
+                    action=ExpenseEvidenceAuditEvent.Action.DELETE,
+                    storage=storage,
+                    journal=journal,
+                )
+            self.assertEqual([name for name, _ in journal.calls], ["intent"])
+            self.assertEqual([name for name, _ in storage.calls], ["delete"])
+            self.assertTrue(path.exists())
+
+            storage = _FailureInjectionStorage(PrivateLocalEvidenceStorage())
+            journal = _FailureInjectionJournal(fail_purged=True)
+            with self.assertRaises(DeletionLedgerError):
+                finish_evidence_deletion(
+                    evidence.pk,
+                    reason_code="synthetic_contract_test",
+                    action=ExpenseEvidenceAuditEvent.Action.DELETE,
+                    storage=storage,
+                    journal=journal,
+                )
+            self.assertEqual([name for name, _ in journal.calls], ["intent", "purged"])
+            self.assertFalse(path.exists())
+            evidence.refresh_from_db()
+            self.assertEqual(
+                evidence.state, ExpenseClaimEvidence.State.DELETION_PENDING
+            )
+
+            retry_storage = _FailureInjectionStorage(PrivateLocalEvidenceStorage())
+            retry_journal = _FailureInjectionJournal()
+            self.assertTrue(
+                finish_evidence_deletion(
+                    evidence.pk,
+                    reason_code="synthetic_contract_test",
+                    action=ExpenseEvidenceAuditEvent.Action.DELETE,
+                    storage=retry_storage,
+                    journal=retry_journal,
+                )
+            )
+            evidence.refresh_from_db()
+            self.assertEqual(evidence.state, ExpenseClaimEvidence.State.DELETED)
+            self.assertEqual(
+                [name for name, _ in retry_journal.calls], ["intent", "purged"]
+            )
 
     @override_settings(
         DEBUG=True,
