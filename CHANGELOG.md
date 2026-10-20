@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.24.0 (2026-10-20)
+
+### Features
+
+- **inventory**: Track material issues against jobs
+  ([#110](https://github.com/Tridim-Technologies/tridim-business/pull/110),
+  [`3964e68`](https://github.com/Tridim-Technologies/tridim-business/commit/3964e68e790b677c1c8061510090d350e5c8c112))
+
+
 ## v0.23.0 (2026-10-20)
 
 ### Features
