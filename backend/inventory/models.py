@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 from django.db.models.functions import Lower
@@ -12,6 +14,9 @@ class Product(models.Model):
     sku = models.CharField(max_length=64)
     name = models.CharField(max_length=160)
     base_unit = models.CharField(max_length=16)
+    reorder_point = models.DecimalField(
+        max_digits=18, decimal_places=3, default=Decimal("0.000")
+    )
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -26,7 +31,11 @@ class Product(models.Model):
         constraints = [
             models.UniqueConstraint(
                 "organization", Lower("sku"), name="inventory_sku_ci_org_uniq"
-            )
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reorder_point__gte=0),
+                name="inventory_reorder_point_nonnegative",
+            ),
         ]
 
 

@@ -39,6 +39,8 @@ This backlog turns the existing product plan into an implementation sequence. It
 
 **Job material usage increment:** Issue #109 records quantity-only stock issues against organization jobs. Immutable job issue history links to inventory movements and is visible from the job and inventory views. Stock is reduced immediately; reservations, costing, valuation, invoicing, and accounting are not included. See [Synthetic Inventory Alpha](INVENTORY_ALPHA.md).
 
+**Inventory reorder increment:** Issue #115 adds product-level reorder points, aggregate on-hand visibility, and purchasing suggestions that subtract outstanding incoming quantities. Managers can prefill an editable supplier-order draft and must choose the supplier; nothing is issued automatically. See [Synthetic Inventory Alpha](INVENTORY_ALPHA.md) and [Supplier orders and stock receiving](PURCHASING_ALPHA.md).
+
 ## P3 — Payments and reconciliation
 
 - Begin with explicit manual payment recording and allocation.

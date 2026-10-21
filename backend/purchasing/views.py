@@ -12,6 +12,7 @@ from rest_framework.exceptions import ValidationError
 
 from accounts.models import Membership, Organization
 from inventory.models import Location, Product, StockMovement
+from inventory.services import product_stock_totals
 
 from .models import (
     PurchaseOrder,
@@ -79,6 +80,51 @@ def _received_quantities(order_ids):
         .annotate(total=Sum("quantity"))
     )
     return {row["order_line_id"]: row["total"] for row in rows}
+
+
+def _reorder_suggestions(organization_id):
+    open_orders = PurchaseOrder.objects.filter(
+        organization_id=organization_id,
+        status__in=[
+            PurchaseOrder.Status.ISSUED,
+            PurchaseOrder.Status.PARTIALLY_RECEIVED,
+        ],
+    )
+    open_order_ids = list(open_orders.values_list("id", flat=True))
+    received = _received_quantities(open_order_ids)
+    incoming = {}
+    for line_id, product_id, ordered_quantity in PurchaseOrderLine.objects.filter(
+        purchase_order_id__in=open_order_ids
+    ).values_list("id", "product_id", "ordered_quantity"):
+        remaining = ordered_quantity - received.get(line_id, Decimal("0.000"))
+        incoming[product_id] = incoming.get(product_id, Decimal("0.000")) + remaining
+
+    stock = product_stock_totals(organization_id)
+    suggestions = []
+    products = Product.objects.filter(
+        organization_id=organization_id, is_active=True
+    ).order_by("name", "id")
+    for product in products:
+        if product.reorder_point <= 0:
+            continue
+        on_hand = stock.get(product.pk, Decimal("0.000"))
+        if on_hand >= product.reorder_point:
+            continue
+        on_order = incoming.get(product.pk, Decimal("0.000"))
+        suggested = max(product.reorder_point - on_hand - on_order, Decimal("0.000"))
+        suggestions.append(
+            {
+                "id": product.pk,
+                "sku": product.sku,
+                "name": product.name,
+                "base_unit": product.base_unit,
+                "reorder_point": format(product.reorder_point, ".3f"),
+                "on_hand_quantity": format(on_hand, ".3f"),
+                "on_order_quantity": format(on_order, ".3f"),
+                "suggested_quantity": format(suggested, ".3f"),
+            }
+        )
+    return suggestions
 
 
 def _order_response(orders):
@@ -152,9 +198,10 @@ def purchasing_view(request, organization_id):
             ),
             "products": list(
                 Product.objects.filter(organization_id=organization_id).values(
-                    "id", "sku", "name", "base_unit", "is_active"
+                    "id", "sku", "name", "base_unit", "is_active", "reorder_point"
                 )
             ),
+            "reorder_suggestions": _reorder_suggestions(organization_id),
         }
     )
 

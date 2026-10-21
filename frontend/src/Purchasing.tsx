@@ -3,7 +3,8 @@ import type { FormEvent } from 'react'
 import './Purchasing.css'
 
 type Supplier = { id: number; code: string; name: string; is_active: boolean }
-type Product = { id: number; sku: string; name: string; base_unit: string; is_active: boolean }
+type Product = { id: number; sku: string; name: string; base_unit: string; reorder_point: string; is_active: boolean }
+type ReorderSuggestion = { id: number; sku: string; name: string; base_unit: string; reorder_point: string; on_hand_quantity: string; on_order_quantity: string; suggested_quantity: string }
 type Location = { id: number; code: string; name: string; is_active: boolean }
 type OrderLine = {
   id: number
@@ -43,8 +44,13 @@ type Order = {
   lines: OrderLine[]
   receipts: Receipt[]
 }
-type PurchasingData = { suppliers: Supplier[]; orders: Order[]; locations: Location[]; products: Product[] }
+type PurchasingData = { suppliers: Supplier[]; orders: Order[]; locations: Location[]; products: Product[]; reorder_suggestions: ReorderSuggestion[] }
 type DraftLine = { product_id: string; quantity: string }
+
+function milliunits(value: string): bigint {
+  const [whole, fraction = ''] = value.split('.')
+  return BigInt(whole || '0') * 1000n + BigInt((fraction + '000').slice(0, 3))
+}
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
@@ -71,17 +77,19 @@ function OrderForm({
   products,
   saving,
   initial,
+  initialLines,
   onSave,
 }: {
   suppliers: Supplier[]
   products: Product[]
   saving: boolean
   initial?: Order
+  initialLines?: DraftLine[]
   onSave: (payload: { supplier_id: number; note: string; lines: { product_id: number; ordered_quantity: string }[] }) => Promise<void>
 }) {
   const [supplierId, setSupplierId] = useState(String(initial?.supplier_id || ''))
   const [note, setNote] = useState(initial?.note || '')
-  const [lines, setLines] = useState<DraftLine[]>(initial?.lines.map((line) => ({ product_id: String(line.product_id), quantity: line.ordered_quantity })) || [{ product_id: '', quantity: '' }])
+  const [lines, setLines] = useState<DraftLine[]>(initial?.lines.map((line) => ({ product_id: String(line.product_id), quantity: line.ordered_quantity })) || initialLines || [{ product_id: '', quantity: '' }])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -118,11 +126,29 @@ function OrderForm({
 }
 
 export default function Purchasing({ organization, canManage }: { organization: string; canManage: boolean }) {
-  const [data, setData] = useState<PurchasingData>({ suppliers: [], orders: [], locations: [], products: [] })
+  const [data, setData] = useState<PurchasingData>({ suppliers: [], orders: [], locations: [], products: [], reorder_suggestions: [] })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [selectedReorders, setSelectedReorders] = useState<number[] | null>(null)
+  const [reorderDraft, setReorderDraft] = useState<DraftLine[] | null>(null)
   const receiptKeys = useRef(new Map<string, string>())
   const base = `/api/organizations/${organization}/purchasing/`
+  const selectableSuggestions = data.reorder_suggestions.filter((item) => milliunits(item.suggested_quantity) > 0n)
+  const selectedIds = selectedReorders ?? selectableSuggestions.map((item) => item.id)
+
+  function toggleReorder(id: number) {
+    setSelectedReorders((current) => {
+      const selected = current ?? selectableSuggestions.map((item) => item.id)
+      return selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id]
+    })
+  }
+
+  function startReorderDraft() {
+    const lines = data.reorder_suggestions
+      .filter((item) => selectedIds.includes(item.id) && milliunits(item.suggested_quantity) > 0n)
+      .map((item) => ({ product_id: String(item.id), quantity: item.suggested_quantity }))
+    if (lines.length) setReorderDraft(lines)
+  }
 
   const refresh = useCallback(async () => {
     if (!organization) return
@@ -196,13 +222,16 @@ export default function Purchasing({ organization, canManage }: { organization: 
     <div className="page-heading"><div><p className="eyebrow">OPERATIONS</p><h1>Purchasing</h1><p className="muted">Track supplier orders and receive quantities into stock locations.</p></div><span className="count-pill">{data.orders.length} {data.orders.length === 1 ? 'order' : 'orders'}</span></div>
     {error && <div className="alert inline-alert">{error}</div>}
     <p className="expense-notice">Quantity-only purchasing. Orders and receipts do not capture prices, currency, tax, payables, payments, or accounting entries.</p>
+    <section className="panel purchasing-reorder-panel"><div className="panel-heading"><div><h2>Reorder suggestions</h2><p>Low-stock products after subtracting quantities still due on issued orders.</p></div>{canManage && selectableSuggestions.length > 0 && <button className="quiet-action" disabled={!selectedIds.length} onClick={startReorderDraft}>Start draft with selected</button>}</div>
+      {data.reorder_suggestions.length ? <div className="table-scroll"><table><thead><tr>{canManage && <th>Select</th>}<th>SKU</th><th>Product</th><th>On hand</th><th>Reorder point</th><th>On order</th><th>Suggested</th></tr></thead><tbody>{data.reorder_suggestions.map((item) => { const covered = milliunits(item.suggested_quantity) === 0n; return <tr key={item.id}>{canManage && <td>{!covered && <input aria-label={`Select ${item.name} for reorder draft`} type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleReorder(item.id)} />}</td>}<td>{item.sku}</td><td>{item.name} ({item.base_unit})</td><td>{item.on_hand_quantity}</td><td>{item.reorder_point}</td><td>{item.on_order_quantity}</td><td>{covered ? <span className="purchasing-covered">Covered by incoming</span> : item.suggested_quantity}</td></tr> })}</tbody></table></div> : <div className="empty-state"><strong>No products are below their reorder points</strong><p>Set a reorder point on a product in Inventory to track it here.</p></div>}
+    </section>
     {canManage && <div className="purchasing-setup-grid">
       <section className="panel add-panel"><div className="panel-heading"><div><h2>Add a supplier</h2><p>Use a business code and name. Contact details are not collected.</p></div></div>
         <form className="stack-form" onSubmit={(event) => void createSupplier(event)}><label>Supplier code<input name="code" maxLength={32} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,31}" required /></label><label>Supplier name<input name="name" minLength={2} maxLength={160} required /></label><button className="primary" disabled={saving}>Add supplier <span>＋</span></button></form>
         <div className="purchasing-supplier-list">{data.suppliers.map((supplier) => <details key={supplier.id}><summary>{supplier.code} · {supplier.name}{!supplier.is_active ? ' · inactive' : ''}</summary><form className="stack-form" onSubmit={(event) => void updateSupplier(event, supplier)}><label>Code<input name="code" defaultValue={supplier.code} maxLength={32} required /></label><label>Name<input name="name" defaultValue={supplier.name} maxLength={160} required /></label><label className="inventory-checkbox"><input type="checkbox" name="is_active" defaultChecked={supplier.is_active} /> Active</label><button className="quiet-action" disabled={saving}>Save supplier</button></form></details>)}</div>
       </section>
-      <section className="panel add-panel"><div className="panel-heading"><div><h2>Create a supplier order</h2><p>Drafts can be edited or removed. Issue an order to start receiving.</p></div></div>
-        {data.suppliers.some((supplier) => supplier.is_active) && data.products.some((product) => product.is_active) ? <OrderForm suppliers={data.suppliers} products={data.products} saving={saving} onSave={(payload) => saveOrder(payload)} /> : <div className="empty-state"><strong>Add an active supplier and product first</strong></div>}
+      <section className="panel add-panel"><div className="panel-heading"><div><h2>{reorderDraft ? 'Review reorder draft' : 'Create a supplier order'}</h2><p>{reorderDraft ? 'Choose a supplier and edit the suggested quantities before saving this draft.' : 'Drafts can be edited or removed. Issue an order to start receiving.'}</p></div>{reorderDraft && <button type="button" className="quiet-action" onClick={() => setReorderDraft(null)}>Clear suggestions</button>}</div>
+        {data.suppliers.some((supplier) => supplier.is_active) && data.products.some((product) => product.is_active) ? <OrderForm key={reorderDraft ? `reorder-${reorderDraft.map((line) => `${line.product_id}:${line.quantity}`).join(',')}` : 'new-order'} suppliers={data.suppliers} products={data.products} saving={saving} initialLines={reorderDraft || undefined} onSave={async (payload) => { await saveOrder(payload); if (reorderDraft) setReorderDraft(null) }} /> : <div className="empty-state"><strong>Add an active supplier and product first</strong></div>}
       </section>
     </div>}
     <section className="purchasing-order-list">

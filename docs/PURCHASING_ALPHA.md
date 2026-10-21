@@ -4,6 +4,12 @@
 
 Purchasing extends the inventory catalog with a minimal supplier directory, draft supplier orders, issue/cancel transitions, and partial or full receiving into a stock location. Each accepted receipt creates immutable, linked inventory receipt movements in the same database transaction.
 
+## Reorder suggestions
+
+Products with a positive reorder point and aggregate on-hand quantity below that threshold appear in the purchasing suggestions. The suggested quantity is `max(reorder point - total on hand - outstanding incoming quantity, 0)`. Outstanding incoming quantity is the unreceived balance on issued and partially received orders. A product remains visible when incoming orders cover its threshold, with a zero suggestion marked as covered.
+
+Managers can select positive suggestions to prefill an editable supplier-order draft. They choose the supplier and can change or remove each proposed line before saving. The system does not create, issue, or send an order automatically. Reorder points are configured on the product in Inventory and apply across locations.
+
 ## Supplier records
 
 - A supplier has an organization-unique, case-insensitive code, name, active state, creator, and timestamps.
@@ -44,7 +50,7 @@ All routes are organization-scoped beneath `/api/organizations/{organization_id}
 
 | Route | Methods | Purpose |
 |---|---|---|
-| `/purchasing/` | GET | Suppliers, purchase orders with order/receipt history, products, and locations |
+| `/purchasing/` | GET | Suppliers, purchase orders with order/receipt history, products, locations, and low-stock `reorder_suggestions` |
 | `/purchasing/suppliers/` | POST | Create a supplier |
 | `/purchasing/suppliers/{supplier_id}/` | PATCH | Update supplier code, name, or active state |
 | `/purchasing/orders/` | POST | Create a draft with supplier and product lines |
@@ -54,6 +60,8 @@ All routes are organization-scoped beneath `/api/organizations/{organization_id}
 | `/purchasing/orders/{order_id}/receipts/` | GET, POST | List receipts or record a partial/full receipt |
 
 An order line has `product_id` and `ordered_quantity`. A receipt request has `location_id`, `idempotency_key`, and `lines`, each with `order_line_id` and `quantity`. Quantities are decimal strings, such as `"2.500"`.
+
+Each `reorder_suggestions` item includes product `id`, `sku`, `name`, `base_unit`, `reorder_point`, `on_hand_quantity`, `on_order_quantity`, and `suggested_quantity`; quantity values are decimal strings with three places.
 
 The inventory movement response includes `supplier_order_reference` when a receipt movement originates from an order. Standalone inventory receipts remain available and are not attributed to supplier orders.
 
