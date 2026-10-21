@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
-from django.db.models import BigIntegerField, F, Q, Sum, When, Case
+from django.db.models import Q, Sum
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from rest_framework.exceptions import ValidationError
@@ -29,6 +29,7 @@ from .serializers import (
     ProductWriteSerializer,
     StockMovementSerializer,
 )
+from .services import location_stock_balances
 
 READERS = {
     Membership.Role.OWNER,
@@ -73,48 +74,6 @@ def _payload(request, serializer_class, *, partial=False):
     return serializer.validated_data, None
 
 
-def _balances(organization_id):
-    movements = StockMovement.objects.filter(organization_id=organization_id)
-    by_source = (
-        movements.filter(
-            Q(kind=StockMovement.Kind.ISSUE)
-            | Q(
-                kind=StockMovement.Kind.ADJUSTMENT,
-                direction=StockMovement.Direction.DECREASE,
-            )
-            | Q(kind=StockMovement.Kind.TRANSFER)
-        )
-        .values("product_id", "location_id")
-        .annotate(total=Sum("quantity"))
-    )
-    by_destination = (
-        movements.filter(
-            Q(kind=StockMovement.Kind.RECEIPT)
-            | Q(
-                kind=StockMovement.Kind.ADJUSTMENT,
-                direction=StockMovement.Direction.INCREASE,
-            )
-            | Q(kind=StockMovement.Kind.TRANSFER)
-        )
-        .annotate(
-            balance_location_id=Case(
-                When(kind=StockMovement.Kind.TRANSFER, then=F("destination_id")),
-                default=F("location_id"),
-                output_field=BigIntegerField(),
-            )
-        )
-        .values("product_id", "balance_location_id")
-        .annotate(total=Sum("quantity"))
-    )
-    totals = {}
-    for row in by_destination:
-        totals[(row["product_id"], row["balance_location_id"])] = row["total"]
-    for row in by_source:
-        key = (row["product_id"], row["location_id"])
-        totals[key] = totals.get(key, Decimal("0")) - row["total"]
-    return totals
-
-
 @require_http_methods(["GET"])
 def inventory_view(request, organization_id):
     membership, error = _membership(request, organization_id)
@@ -122,7 +81,7 @@ def inventory_view(request, organization_id):
         return error
     products = Product.objects.filter(organization_id=organization_id)
     locations = Location.objects.filter(organization_id=organization_id)
-    totals = _balances(organization_id)
+    totals = location_stock_balances(organization_id)
     product_data = ProductSerializer(products, many=True).data
     location_data = LocationSerializer(locations, many=True).data
     for product in product_data:
@@ -136,6 +95,13 @@ def inventory_view(request, organization_id):
             }
             for location in location_data
         ]
+        product["on_hand_quantity"] = format(
+            sum(
+                (Decimal(balance["quantity"]) for balance in product["balances"]),
+                Decimal("0.000"),
+            ),
+            ".3f",
+        )
     movements = StockMovement.objects.filter(
         organization_id=organization_id
     ).select_related(
@@ -293,7 +259,7 @@ def inventory_location_detail_view(request, organization_id, location_id):
         if values.get("is_active") is False and location.is_active:
             has_stock = any(
                 balance_location_id == location.pk and quantity > 0
-                for (_, balance_location_id), quantity in _balances(
+                for (_, balance_location_id), quantity in location_stock_balances(
                     organization_id
                 ).items()
             )

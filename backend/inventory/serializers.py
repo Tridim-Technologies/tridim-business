@@ -23,10 +23,24 @@ class StrictSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
 
+class ExactDecimalField(serializers.DecimalField):
+    def to_internal_value(self, data):
+        if isinstance(data, float):
+            raise serializers.ValidationError("Send quantities as decimal strings.")
+        return super().to_internal_value(data)
+
+
 class ProductWriteSerializer(StrictSerializer):
     sku = serializers.RegexField(regex=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
     name = serializers.CharField(max_length=160, min_length=2, trim_whitespace=True)
     base_unit = serializers.RegexField(regex=r"^[A-Za-z0-9._-]{1,16}$")
+    reorder_point = ExactDecimalField(
+        max_digits=18,
+        decimal_places=3,
+        min_value=Decimal("0.000"),
+        required=False,
+        default=Decimal("0.000"),
+    )
     is_active = serializers.BooleanField(required=False)
 
     def validate_sku(self, value):
@@ -167,7 +181,15 @@ class JobMaterialIssueSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
-        fields = ("id", "sku", "name", "base_unit", "is_active", "created_at")
+        fields = (
+            "id",
+            "sku",
+            "name",
+            "base_unit",
+            "reorder_point",
+            "is_active",
+            "created_at",
+        )
         read_only_fields = fields
 
 

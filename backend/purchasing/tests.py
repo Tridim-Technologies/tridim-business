@@ -184,6 +184,84 @@ class PurchasingTests(TestCase):
             self.request("get", self.base, user=self.other).status_code, 404
         )
 
+    def test_reorder_suggestions_subtract_open_order_quantities_from_location_stock(
+        self,
+    ):
+        self.product.reorder_point = Decimal("5.000")
+        self.product.save(update_fields=["reorder_point", "updated_at"])
+        second_location = Location.objects.create(
+            organization=self.organization,
+            code="SECOND",
+            name="Second store",
+            created_by=self.owner,
+        )
+        for location, quantity in (
+            (self.location, "1.000"),
+            (second_location, "1.000"),
+        ):
+            StockMovement.objects.create(
+                organization=self.organization,
+                product=self.product,
+                kind=StockMovement.Kind.RECEIPT,
+                location=location,
+                quantity=Decimal(quantity),
+                reason="Synthetic opening stock",
+                idempotency_key=uuid.uuid4(),
+                actor=self.owner,
+            )
+
+        supplier = self.create_supplier()
+        order = self.create_order(supplier, quantity="2.000")
+        self.assertEqual(self.issue(order).status_code, 200)
+        receipt = self.receive(
+            order,
+            [{"order_line_id": self.order_line_id(order), "quantity": "0.500"}],
+        )
+        self.assertEqual(receipt.status_code, 201, receipt.content)
+
+        covered = Product.objects.create(
+            organization=self.organization,
+            sku="COVERED",
+            name="Covered by incoming stock",
+            base_unit="ea",
+            reorder_point=Decimal("4.000"),
+            created_by=self.owner,
+        )
+        StockMovement.objects.create(
+            organization=self.organization,
+            product=covered,
+            kind=StockMovement.Kind.RECEIPT,
+            location=self.location,
+            quantity=Decimal("1.000"),
+            reason="Synthetic opening stock",
+            idempotency_key=uuid.uuid4(),
+            actor=self.owner,
+        )
+        covered_order = self.create_order(
+            supplier,
+            quantity="5.000",
+            lines=[{"product_id": covered.pk, "ordered_quantity": "5.000"}],
+        )
+        self.assertEqual(self.issue(covered_order).status_code, 200)
+
+        response = self.request("get", self.base).json()
+        suggestions = {row["id"]: row for row in response["reorder_suggestions"]}
+        self.assertEqual(
+            suggestions[self.product.pk],
+            {
+                "id": self.product.pk,
+                "sku": self.product.sku,
+                "name": self.product.name,
+                "base_unit": self.product.base_unit,
+                "reorder_point": "5.000",
+                "on_hand_quantity": "2.500",
+                "on_order_quantity": "1.500",
+                "suggested_quantity": "1.000",
+            },
+        )
+        self.assertEqual(suggestions[covered.pk]["on_order_quantity"], "5.000")
+        self.assertEqual(suggestions[covered.pk]["suggested_quantity"], "0.000")
+
     def test_purchasing_read_and_write_role_matrix(self):
         read_order = self.create_order()
         receipts_url = reverse(

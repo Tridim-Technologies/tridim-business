@@ -149,6 +149,58 @@ class InventoryTests(TestCase):
         self.assertEqual(foreign_response.status_code, 200)
         self.assertEqual(foreign_response.json()["products"], [])
 
+    def test_reorder_point_validation_and_aggregate_on_hand_quantity(self):
+        product = self.create_product(reorder_point="4.000")
+        first = self.create_location("FIRST", "First location")
+        second = self.create_location("SECOND", "Second location")
+        self.assertEqual(
+            self.movement(product, first, "receipt", "1.250").status_code, 201
+        )
+        self.assertEqual(
+            self.movement(product, second, "receipt", "1.000").status_code, 201
+        )
+        self.assertEqual(
+            self.movement(
+                product,
+                first,
+                "transfer",
+                "0.500",
+                destination=second,
+            ).status_code,
+            201,
+        )
+
+        inventory = self.request("get", self.base).json()
+        product_data = next(
+            item for item in inventory["products"] if item["id"] == product.pk
+        )
+        self.assertEqual(product_data["reorder_point"], "4.000")
+        self.assertEqual(product_data["on_hand_quantity"], "2.250")
+        self.assertEqual(
+            self.request(
+                "patch",
+                reverse(
+                    "inventory-product-detail",
+                    args=[self.organization.pk, product.pk],
+                ),
+                {"reorder_point": "-0.001"},
+            ).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.request(
+                "patch",
+                reverse(
+                    "inventory-product-detail",
+                    args=[self.organization.pk, product.pk],
+                ),
+                {"reorder_point": 4.25},
+            ).status_code,
+            400,
+        )
+        product.refresh_from_db()
+        self.assertEqual(product.reorder_point, Decimal("4.000"))
+
     def test_receipts_issues_adjustments_and_transfers_are_idempotent_and_audited(self):
         product = self.create_product()
         first = self.create_location("MAIN", "Main store")

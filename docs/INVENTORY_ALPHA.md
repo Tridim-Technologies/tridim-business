@@ -7,6 +7,7 @@ The inventory screen provides an organization-scoped catalog, stock locations, o
 ## Catalog and locations
 
 - A product has an organization-unique SKU, name, base unit, and active state. SKU matching is case-insensitive within an organization.
+- A product can have a non-negative reorder point in its base unit. The default `0.000` disables reorder tracking. A positive threshold is compared with the total on-hand quantity across all locations; it does not trigger an automatic purchase.
 - A location has an organization-unique code, name, and active state.
 - Products and locations are never hard-deleted after movement history references them.
 - Product and location codes do not imply a country-specific numbering, unit conversion, or currency convention.
@@ -24,7 +25,7 @@ Each movement is immutable and records the product, quantity, actor, time, reaso
 
 Quantities use decimal precision of three places. Receipts and increases establish stock; issues, decreases, and transfers are rejected if they would produce a negative quantity. Repeating a request with the same organization-scoped idempotency key and same payload returns the original movement. Reusing the key for different movement data returns a conflict.
 
-On-hand quantities are calculated from movement history. Corrections are new compensating movements; existing events are not edited or deleted through the API.
+On-hand quantities are calculated from movement history and returned per location and as an organization-wide total. Products below a positive reorder point appear in the low-stock view. Corrections are new compensating movements; existing events are not edited or deleted through the API.
 
 ## Issue materials to a job
 
@@ -43,7 +44,7 @@ This records consumption after it occurs. It does not reserve stock, allocate ma
 
 | Route | Methods | Purpose |
 |---|---|---|
-| `/api/organizations/{organization_id}/inventory/` | GET | Products with per-location balances, locations, and the latest 100 movements |
+| `/api/organizations/{organization_id}/inventory/` | GET | Products with `reorder_point`, aggregate `on_hand_quantity`, per-location balances, locations, and the latest 100 movements |
 | `/api/organizations/{organization_id}/inventory/products/` | POST | Create a product |
 | `/api/organizations/{organization_id}/inventory/products/{product_id}/` | PATCH | Update product catalog fields |
 | `/api/organizations/{organization_id}/inventory/locations/` | POST | Create a location |
@@ -51,7 +52,7 @@ This records consumption after it occurs. It does not reserve stock, allocate ma
 | `/api/organizations/{organization_id}/inventory/movements/` | GET, POST | List recent movements or record one movement |
 | `/api/organizations/{organization_id}/jobs/{job_id}/material-issues/` | POST | Record quantity-only stock issue lines against a job |
 
-Movement requests include `product_id`, `kind`, `location_id`, a positive decimal `quantity`, a reason, and a UUID `idempotency_key`. Transfers also require `destination_id`; adjustments require `direction` (`increase` or `decrease`). Quantities should be sent as decimal strings, not floating-point JSON numbers.
+Product create/update requests can include `reorder_point` as a non-negative decimal string. Movement requests include `product_id`, `kind`, `location_id`, a positive decimal `quantity`, a reason, and a UUID `idempotency_key`. Transfers also require `destination_id`; adjustments require `direction` (`increase` or `decrease`). Quantities should be sent as decimal strings, not floating-point JSON numbers.
 
 ## Scope limits and follow-up
 

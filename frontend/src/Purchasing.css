@@ -11,6 +11,25 @@
   gap: 12px;
 }
 
+.purchasing-reorder-panel {
+  margin: 18px 0;
+}
+
+.purchasing-reorder-panel .panel-heading {
+  align-items: center;
+}
+
+.purchasing-reorder-panel input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: #287451;
+}
+
+.purchasing-covered {
+  color: #146c43;
+  font-weight: 650;
+}
+
 .purchasing-supplier-list {
   margin-top: 18px;
 }

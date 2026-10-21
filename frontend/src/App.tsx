@@ -643,7 +643,7 @@ export default function App() {
               </article>
             })}</div> : <div className="empty-state"><div className="empty-icon">◇</div><strong>No expense claims yet</strong><p>Assigned members can create a draft for a job.</p></div>}
           </section>
-        </> : page === 'inventory' ? <Inventory organization={organization} canManage={canManageInventory} /> : page === 'purchasing' ? <Purchasing organization={organization} canManage={canManagePurchasing} /> : page === 'invoices' ? <>
+        </> : page === 'inventory' ? <Inventory organization={organization} canManage={canManageInventory} onOpenPurchasing={() => setPage('purchasing')} /> : page === 'purchasing' ? <Purchasing organization={organization} canManage={canManagePurchasing} /> : page === 'invoices' ? <>
           <div className="page-heading"><div><p className="eyebrow">FINANCE</p><h1>Invoices</h1><p className="muted">Internal invoice and manual receipt records for completed work. Tax is not calculated.</p></div><span className="count-pill">{invoices.length} {invoices.length === 1 ? 'invoice' : 'invoices'}</span></div>
           {error && <div className="alert inline-alert">{error}</div>}
           <section className="panel export-panel"><div><h2>Finance exports</h2><p>CSV records include an as-of timestamp and status definitions. Reconcile these with your own records.</p></div><div className="export-actions"><a className="quiet-action" href={`/api/organizations/${organization}/exports/invoices.csv`}>Invoices CSV</a><a className="quiet-action" href={`/api/organizations/${organization}/exports/payments.csv`}>Payments CSV</a><a className="quiet-action" href={`/api/organizations/${organization}/exports/allocations.csv`}>Allocations CSV</a></div></section>
