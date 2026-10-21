@@ -18,7 +18,9 @@ class InventoryTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.owner = user_model.objects.create_user(username="inventory-owner")
+        self.admin = user_model.objects.create_user(username="inventory-admin")
         self.operations = user_model.objects.create_user(username="inventory-ops")
+        self.sales = user_model.objects.create_user(username="inventory-sales")
         self.finance = user_model.objects.create_user(username="inventory-finance")
         self.employee = user_model.objects.create_user(username="inventory-employee")
         self.other = user_model.objects.create_user(username="inventory-other")
@@ -28,7 +30,9 @@ class InventoryTests(TestCase):
         )
         for user, role in (
             (self.owner, Membership.Role.OWNER),
+            (self.admin, Membership.Role.ADMIN),
             (self.operations, Membership.Role.OPERATIONS),
+            (self.sales, Membership.Role.SALES),
             (self.finance, Membership.Role.FINANCE),
             (self.employee, Membership.Role.EMPLOYEE),
         ):
@@ -254,6 +258,121 @@ class InventoryTests(TestCase):
         )
         self.assertEqual(self.request("delete", detail_url).status_code, 405)
         self.assertEqual(self.request("patch", self.movement_url, {}).status_code, 405)
+
+    def test_inventory_read_and_write_role_matrix(self):
+        product = self.create_product()
+        location = self.create_location("ROLE-MATRIX", "Role matrix store")
+
+        for user in (
+            self.owner,
+            self.admin,
+            self.operations,
+            self.sales,
+            self.finance,
+        ):
+            with self.subTest(read_role=user.username):
+                self.assertEqual(
+                    self.request("get", self.base, user=user).status_code, 200
+                )
+                self.assertEqual(
+                    self.request("get", self.movement_url, user=user).status_code, 200
+                )
+        self.assertEqual(
+            self.request("get", self.base, user=self.employee).status_code, 403
+        )
+
+        allowed = (self.owner, self.admin, self.operations)
+        for index, user in enumerate(allowed):
+            with self.subTest(write_role=user.username):
+                movement = self.movement(
+                    product,
+                    location,
+                    "receipt",
+                    "1.000",
+                    user=user,
+                )
+                self.assertEqual(movement.status_code, 201, movement.content)
+                self.assertEqual(movement.json()["actor"], user.username)
+                created_product = self.request(
+                    "post",
+                    self.product_url,
+                    {
+                        "sku": f"ROLE-{index}",
+                        "name": f"Role matrix item {index}",
+                        "base_unit": "ea",
+                    },
+                    user=user,
+                )
+                self.assertEqual(
+                    created_product.status_code, 201, created_product.content
+                )
+                created_location = self.request(
+                    "post",
+                    self.location_url,
+                    {"code": f"ROLE-{index}", "name": f"Role matrix location {index}"},
+                    user=user,
+                )
+                self.assertEqual(
+                    created_location.status_code, 201, created_location.content
+                )
+
+        product_detail = reverse(
+            "inventory-product-detail", args=[self.organization.pk, product.pk]
+        )
+        location_detail = reverse(
+            "inventory-location-detail", args=[self.organization.pk, location.pk]
+        )
+        counts = (
+            Product.objects.filter(organization=self.organization).count(),
+            Location.objects.filter(organization=self.organization).count(),
+            StockMovement.objects.filter(organization=self.organization).count(),
+        )
+        for user in (self.sales, self.finance, self.employee):
+            with self.subTest(denied_write_role=user.username):
+                responses = (
+                    self.movement(product, location, "receipt", "1.000", user=user),
+                    self.request(
+                        "post",
+                        self.product_url,
+                        {
+                            "sku": f"DENIED-{user.pk}",
+                            "name": "Denied",
+                            "base_unit": "ea",
+                        },
+                        user=user,
+                    ),
+                    self.request(
+                        "patch", product_detail, {"name": "Denied change"}, user=user
+                    ),
+                    self.request(
+                        "post",
+                        self.location_url,
+                        {"code": f"DENIED-{user.pk}", "name": "Denied"},
+                        user=user,
+                    ),
+                    self.request(
+                        "patch", location_detail, {"name": "Denied change"}, user=user
+                    ),
+                )
+                self.assertEqual(
+                    [response.status_code for response in responses], [403] * 5
+                )
+                self.assertEqual(
+                    (
+                        Product.objects.filter(organization=self.organization).count(),
+                        Location.objects.filter(organization=self.organization).count(),
+                        StockMovement.objects.filter(
+                            organization=self.organization
+                        ).count(),
+                    ),
+                    counts,
+                )
+                product.refresh_from_db()
+                location.refresh_from_db()
+                self.assertEqual(product.name, "Synthetic Item")
+                self.assertEqual(location.name, "Role matrix store")
+                self.client.force_login(self.owner)
+                self.assertEqual(self.balance(product, location), Decimal("3.000"))
 
     def test_unit_changes_after_movement_and_location_deactivation_with_stock_are_blocked(
         self,

@@ -28,7 +28,9 @@ class PurchasingTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.owner = user_model.objects.create_user(username="purchasing-owner")
+        self.admin = user_model.objects.create_user(username="purchasing-admin")
         self.operations = user_model.objects.create_user(username="purchasing-ops")
+        self.sales = user_model.objects.create_user(username="purchasing-sales")
         self.finance = user_model.objects.create_user(username="purchasing-finance")
         self.employee = user_model.objects.create_user(username="purchasing-employee")
         self.other = user_model.objects.create_user(username="purchasing-other")
@@ -38,7 +40,9 @@ class PurchasingTests(TestCase):
         )
         for user, role in (
             (self.owner, Membership.Role.OWNER),
+            (self.admin, Membership.Role.ADMIN),
             (self.operations, Membership.Role.OPERATIONS),
+            (self.sales, Membership.Role.SALES),
             (self.finance, Membership.Role.FINANCE),
             (self.employee, Membership.Role.EMPLOYEE),
         ):
@@ -83,14 +87,19 @@ class PurchasingTests(TestCase):
             content_type="application/json",
         )
 
-    def create_supplier(self, code="SUP-1", name="Synthetic supplier", **fields):
+    def create_supplier(
+        self, code="SUP-1", name="Synthetic supplier", *, user=None, **fields
+    ):
         response = self.request(
-            "post", self.suppliers_url, {"code": code, "name": name, **fields}
+            "post",
+            self.suppliers_url,
+            {"code": code, "name": name, **fields},
+            user=user,
         )
         self.assertEqual(response.status_code, 201, response.content)
         return Supplier.objects.get(pk=response.json()["id"])
 
-    def create_order(self, supplier=None, *, quantity="5.000", lines=None):
+    def create_order(self, supplier=None, *, quantity="5.000", lines=None, user=None):
         supplier = supplier or self.create_supplier()
         response = self.request(
             "post",
@@ -101,17 +110,19 @@ class PurchasingTests(TestCase):
                 "lines": lines
                 or [{"product_id": self.product.pk, "ordered_quantity": quantity}],
             },
+            user=user,
         )
         self.assertEqual(response.status_code, 201, response.content)
         return response.json()
 
-    def issue(self, order):
+    def issue(self, order, *, user=None):
         return self.request(
             "post",
             reverse("purchase-order-issue", args=[self.organization.pk, order["id"]]),
+            user=user,
         )
 
-    def receive(self, order, lines, *, key=None, location=None):
+    def receive(self, order, lines, *, key=None, location=None, user=None):
         return self.request(
             "post",
             reverse(
@@ -123,6 +134,7 @@ class PurchasingTests(TestCase):
                 "idempotency_key": str(key or uuid.uuid4()),
                 "lines": lines,
             },
+            user=user,
         )
 
     def order_line_id(self, order):
@@ -171,6 +183,196 @@ class PurchasingTests(TestCase):
         self.assertEqual(
             self.request("get", self.base, user=self.other).status_code, 404
         )
+
+    def test_purchasing_read_and_write_role_matrix(self):
+        read_order = self.create_order()
+        receipts_url = reverse(
+            "purchase-order-receipts",
+            args=[self.organization.pk, read_order["id"]],
+        )
+        for user in (
+            self.owner,
+            self.admin,
+            self.operations,
+            self.sales,
+            self.finance,
+        ):
+            with self.subTest(read_role=user.username):
+                self.assertEqual(
+                    self.request("get", self.base, user=user).status_code, 200
+                )
+                self.assertEqual(
+                    self.request("get", receipts_url, user=user).status_code, 200
+                )
+        self.assertEqual(
+            self.request("get", self.base, user=self.employee).status_code, 403
+        )
+        self.assertEqual(
+            self.request("get", receipts_url, user=self.employee).status_code, 403
+        )
+
+        for index, user in enumerate((self.owner, self.admin, self.operations)):
+            with self.subTest(write_role=user.username):
+                supplier = self.create_supplier(code=f"ROLE-{index}", user=user)
+                supplier_update = self.request(
+                    "patch",
+                    reverse(
+                        "purchasing-supplier-detail",
+                        args=[self.organization.pk, supplier.pk],
+                    ),
+                    {"name": f"Updated supplier {index}"},
+                    user=user,
+                )
+                self.assertEqual(supplier_update.status_code, 200)
+                order = self.create_order(supplier, user=user)
+                order_update = self.request(
+                    "patch",
+                    reverse(
+                        "purchase-order-detail",
+                        args=[self.organization.pk, order["id"]],
+                    ),
+                    {
+                        "supplier_id": supplier.pk,
+                        "note": "Updated by authorized role",
+                        "lines": [
+                            {
+                                "product_id": self.product.pk,
+                                "ordered_quantity": "5.000",
+                            }
+                        ],
+                    },
+                    user=user,
+                )
+                self.assertEqual(order_update.status_code, 200, order_update.content)
+                order = order_update.json()
+                issued = self.issue(order, user=user)
+                self.assertEqual(issued.status_code, 200, issued.content)
+                receipt = self.receive(
+                    order,
+                    [{"order_line_id": self.order_line_id(order), "quantity": "1.000"}],
+                    user=user,
+                )
+                self.assertEqual(receipt.status_code, 201, receipt.content)
+                self.assertEqual(receipt.json()["actor"], user.username)
+                cancelled = self.request(
+                    "post",
+                    reverse(
+                        "purchase-order-cancel",
+                        args=[self.organization.pk, order["id"]],
+                    ),
+                    user=user,
+                )
+                self.assertEqual(cancelled.status_code, 200, cancelled.content)
+                self.assertEqual(
+                    cancelled.json()["status"], PurchaseOrder.Status.CANCELLED
+                )
+
+                deletable = self.create_order(supplier, user=user)
+                deleted = self.request(
+                    "delete",
+                    reverse(
+                        "purchase-order-detail",
+                        args=[self.organization.pk, deletable["id"]],
+                    ),
+                    user=user,
+                )
+                self.assertEqual(deleted.status_code, 204, deleted.content)
+
+        supplier = self.create_supplier(code="DENIED-SUP")
+        draft_order = self.create_order(supplier)
+        issued_order = self.create_order(supplier, quantity="2.000")
+        self.assertEqual(self.issue(issued_order).status_code, 200)
+        supplier_detail = reverse(
+            "purchasing-supplier-detail", args=[self.organization.pk, supplier.pk]
+        )
+        order_detail = reverse(
+            "purchase-order-detail", args=[self.organization.pk, draft_order["id"]]
+        )
+        order_cancel = reverse(
+            "purchase-order-cancel", args=[self.organization.pk, issued_order["id"]]
+        )
+        counts = (
+            Supplier.objects.filter(organization=self.organization).count(),
+            PurchaseOrder.objects.filter(organization=self.organization).count(),
+            PurchaseReceipt.objects.filter(organization=self.organization).count(),
+            StockMovement.objects.filter(organization=self.organization).count(),
+        )
+        for user in (self.sales, self.finance, self.employee):
+            with self.subTest(denied_write_role=user.username):
+                responses = (
+                    self.request(
+                        "post",
+                        self.suppliers_url,
+                        {"code": f"NO-{user.pk}", "name": "Denied"},
+                        user=user,
+                    ),
+                    self.request(
+                        "patch", supplier_detail, {"name": "Denied"}, user=user
+                    ),
+                    self.request(
+                        "post",
+                        self.orders_url,
+                        {
+                            "supplier_id": supplier.pk,
+                            "lines": [
+                                {
+                                    "product_id": self.product.pk,
+                                    "ordered_quantity": "1.000",
+                                }
+                            ],
+                        },
+                        user=user,
+                    ),
+                    self.request(
+                        "patch",
+                        order_detail,
+                        {
+                            "supplier_id": supplier.pk,
+                            "lines": [
+                                {
+                                    "product_id": self.product.pk,
+                                    "ordered_quantity": "1.000",
+                                }
+                            ],
+                        },
+                        user=user,
+                    ),
+                    self.request("delete", order_detail, user=user),
+                    self.issue(draft_order, user=user),
+                    self.request("post", order_cancel, user=user),
+                    self.receive(
+                        issued_order,
+                        [
+                            {
+                                "order_line_id": self.order_line_id(issued_order),
+                                "quantity": "1.000",
+                            }
+                        ],
+                        user=user,
+                    ),
+                )
+                self.assertEqual(
+                    [response.status_code for response in responses], [403] * 8
+                )
+                self.assertEqual(
+                    (
+                        Supplier.objects.filter(organization=self.organization).count(),
+                        PurchaseOrder.objects.filter(
+                            organization=self.organization
+                        ).count(),
+                        PurchaseReceipt.objects.filter(
+                            organization=self.organization
+                        ).count(),
+                        StockMovement.objects.filter(
+                            organization=self.organization
+                        ).count(),
+                    ),
+                    counts,
+                )
+                draft_order_model = PurchaseOrder.objects.get(pk=draft_order["id"])
+                issued_order_model = PurchaseOrder.objects.get(pk=issued_order["id"])
+                self.assertEqual(draft_order_model.status, PurchaseOrder.Status.DRAFT)
+                self.assertEqual(issued_order_model.status, PurchaseOrder.Status.ISSUED)
 
     def test_draft_order_is_editable_then_issue_freezes_it_and_issue_retry_is_safe(
         self,
