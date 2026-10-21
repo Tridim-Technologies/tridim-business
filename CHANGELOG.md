@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v0.25.0 (2026-10-21)
+
+### Features
+
+- **inventory**: Add reorder suggestions
+  ([#116](https://github.com/Tridim-Technologies/tridim-business/pull/116),
+  [`1602c07`](https://github.com/Tridim-Technologies/tridim-business/commit/1602c07725ac1a3ee3fa979f46abb1e651344dfc))
+
+### Testing
+
+- **security**: Cover inventory and purchasing role matrix
+  ([#114](https://github.com/Tridim-Technologies/tridim-business/pull/114),
+  [`6cf2fb1`](https://github.com/Tridim-Technologies/tridim-business/commit/6cf2fb1ccc9b6cc58e5871e1f580e248c5684066))
+
+- **security**: Verify inventory job material role boundaries
+  ([#112](https://github.com/Tridim-Technologies/tridim-business/pull/112),
+  [`9352a12`](https://github.com/Tridim-Technologies/tridim-business/commit/9352a124d15663aab0de8955b8948b81f0801c1d))
+
+
 ## v0.24.0 (2026-10-20)
 
 ### Features
