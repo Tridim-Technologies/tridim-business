@@ -18,15 +18,21 @@ class JobMaterialIssueTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.owner = user_model.objects.create_user(username="material-owner")
+        self.admin = user_model.objects.create_user(username="material-admin")
         self.operations = user_model.objects.create_user(username="material-ops")
+        self.sales = user_model.objects.create_user(username="material-sales")
         self.finance = user_model.objects.create_user(username="material-finance")
+        self.employee = user_model.objects.create_user(username="material-employee")
         self.other_owner = user_model.objects.create_user(username="material-other")
         self.organization = Organization.objects.create(name="Material Org")
         self.other_organization = Organization.objects.create(name="Other Material Org")
         for user, role in (
             (self.owner, Membership.Role.OWNER),
+            (self.admin, Membership.Role.ADMIN),
             (self.operations, Membership.Role.OPERATIONS),
+            (self.sales, Membership.Role.SALES),
             (self.finance, Membership.Role.FINANCE),
+            (self.employee, Membership.Role.EMPLOYEE),
         ):
             Membership.objects.create(
                 user=user, organization=self.organization, role=role
@@ -226,3 +232,43 @@ class JobMaterialIssueTests(TestCase):
         )
         self.assertEqual(floating.status_code, 400)
         self.assertEqual(JobMaterialIssue.objects.count(), 0)
+
+    def test_job_material_issue_write_role_matrix(self):
+        for user in (self.owner, self.admin, self.operations):
+            role = Membership.objects.get(
+                user=user, organization=self.organization
+            ).role
+            with self.subTest(allowed_role=role):
+                response = self.post_issue(
+                    self.payload(
+                        lines=[
+                            {
+                                "product_id": self.product.pk,
+                                "location_id": self.location.pk,
+                                "quantity": "0.500",
+                            }
+                        ]
+                    ),
+                    user=user,
+                )
+                self.assertEqual(response.status_code, 201, response.content)
+                self.assertEqual(response.json()["actor"], user.username)
+
+        issue_count = JobMaterialIssue.objects.count()
+        movement_count = StockMovement.objects.filter(
+            source_job_material_issue_line__isnull=False
+        ).count()
+        for user in (self.sales, self.finance, self.employee):
+            role = Membership.objects.get(
+                user=user, organization=self.organization
+            ).role
+            with self.subTest(denied_role=role):
+                response = self.post_issue(self.payload(), user=user)
+                self.assertEqual(response.status_code, 403, response.content)
+                self.assertEqual(JobMaterialIssue.objects.count(), issue_count)
+                self.assertEqual(
+                    StockMovement.objects.filter(
+                        source_job_material_issue_line__isnull=False
+                    ).count(),
+                    movement_count,
+                )
