@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.26.0 (2026-10-22)
+
+### Features
+
+- **inventory**: Add job material reservations
+  ([`f79a1bb`](https://github.com/Tridim-Technologies/tridim-business/commit/f79a1bba6735149f60c21347c6d6803462fcb817))
+
+
 ## v0.25.0 (2026-10-21)
 
 ### Features
