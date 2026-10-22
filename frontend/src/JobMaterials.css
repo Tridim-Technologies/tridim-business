@@ -1,0 +1,25 @@
+.job-materials {
+  display: grid;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.job-materials > h3,
+.job-material-history h4 {
+  margin: 0;
+  color: #34483f;
+  font-size: 11px;
+}
+
+.job-material-history {
+  display: grid;
+  gap: 7px;
+}
+
+.job-material-history .quiet-action {
+  justify-self: start;
+}
+
+.job-materials .field-row {
+  align-items: end;
+}

@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from rest_framework.exceptions import ValidationError
 
@@ -15,6 +16,8 @@ from quotations.models import Job
 from .models import (
     JobMaterialIssue,
     JobMaterialIssueLine,
+    JobMaterialReservation,
+    JobMaterialReservationLine,
     Location,
     Product,
     StockMovement,
@@ -24,12 +27,17 @@ from .serializers import (
     LocationWriteSerializer,
     JobMaterialIssueSerializer,
     JobMaterialIssueWriteSerializer,
+    JobMaterialReservationWriteSerializer,
     MovementWriteSerializer,
     ProductSerializer,
     ProductWriteSerializer,
     StockMovementSerializer,
 )
-from .services import location_stock_balances
+from .services import (
+    available_stock_balances,
+    location_reserved_balances,
+    location_stock_balances,
+)
 
 READERS = {
     Membership.Role.OWNER,
@@ -82,22 +90,47 @@ def inventory_view(request, organization_id):
     products = Product.objects.filter(organization_id=organization_id)
     locations = Location.objects.filter(organization_id=organization_id)
     totals = location_stock_balances(organization_id)
+    reserved = location_reserved_balances(organization_id)
     product_data = ProductSerializer(products, many=True).data
     location_data = LocationSerializer(locations, many=True).data
     for product in product_data:
-        product["balances"] = [
-            {
-                "location_id": location["id"],
-                "location_code": location["code"],
-                "quantity": format(
-                    totals.get((product["id"], location["id"]), Decimal("0")), "f"
-                ),
-            }
-            for location in location_data
-        ]
+        product["balances"] = []
+        for location in location_data:
+            key = (product["id"], location["id"])
+            quantity = totals.get(key, Decimal("0.000"))
+            reserved_quantity = reserved.get(key, Decimal("0.000"))
+            product["balances"].append(
+                {
+                    "location_id": location["id"],
+                    "location_code": location["code"],
+                    "quantity": format(quantity, ".3f"),
+                    "reserved_quantity": format(reserved_quantity, ".3f"),
+                    "available_quantity": format(quantity - reserved_quantity, ".3f"),
+                }
+            )
         product["on_hand_quantity"] = format(
             sum(
                 (Decimal(balance["quantity"]) for balance in product["balances"]),
+                Decimal("0.000"),
+            ),
+            ".3f",
+        )
+        product["reserved_quantity"] = format(
+            sum(
+                (
+                    Decimal(balance["reserved_quantity"])
+                    for balance in product["balances"]
+                ),
+                Decimal("0.000"),
+            ),
+            ".3f",
+        )
+        product["available_quantity"] = format(
+            sum(
+                (
+                    Decimal(balance["available_quantity"])
+                    for balance in product["balances"]
+                ),
                 Decimal("0.000"),
             ),
             ".3f",
@@ -192,6 +225,19 @@ def inventory_product_detail_view(request, organization_id, product_id):
                 },
                 status=409,
             )
+        if values.get("is_active") is False and product.is_active:
+            outstanding = location_reserved_balances(organization_id)
+            if any(
+                reserved > 0
+                for (reserved_product_id, _location_id), reserved in outstanding.items()
+                if reserved_product_id == product.pk
+            ):
+                return JsonResponse(
+                    {
+                        "detail": "Release outstanding job reservations before deactivating this product."
+                    },
+                    status=409,
+                )
         for name, value in values.items():
             setattr(product, name, value)
         try:
@@ -400,10 +446,21 @@ def inventory_movements_view(request, organization_id):
             )
             or kind == StockMovement.Kind.TRANSFER
         )
-        if decreases_source and _balance(product, location.pk) < values["quantity"]:
-            return JsonResponse(
-                {"detail": "Movement would make on-hand stock negative."}, status=409
+        if decreases_source:
+            on_hand = _balance(product, location.pk)
+            available = available_stock_balances(organization_id).get(
+                (product.pk, location.pk), Decimal("0.000")
             )
+            if on_hand < values["quantity"]:
+                return JsonResponse(
+                    {"detail": "Movement would make on-hand stock negative."},
+                    status=409,
+                )
+            if available < values["quantity"]:
+                return JsonResponse(
+                    {"detail": "Movement would consume stock reserved for a job."},
+                    status=409,
+                )
 
         try:
             with transaction.atomic():
@@ -450,6 +507,11 @@ def job_material_issues_view(request, organization_id, job_id):
             {
                 "product_id": line["product_id"],
                 "location_id": line["location_id"],
+                **(
+                    {"reservation_line_id": line["reservation_line_id"]}
+                    if line.get("reservation_line_id") is not None
+                    else {}
+                ),
                 "quantity": format(line["quantity"], "f"),
             }
             for line in values["lines"]
@@ -511,12 +573,76 @@ def job_material_issues_view(request, organization_id, job_id):
                 {"detail": "One or more active locations were not found."}, status=404
             )
 
+        reservation_line_ids = {
+            line["reservation_line_id"]
+            for line in values["lines"]
+            if line.get("reservation_line_id") is not None
+        }
+        reservation_lines = {
+            reservation_line.pk: reservation_line
+            for reservation_line in JobMaterialReservationLine.objects.select_for_update()
+            .filter(
+                pk__in=reservation_line_ids,
+                reservation__organization_id=organization_id,
+                reservation__status=JobMaterialReservation.Status.ACTIVE,
+                reservation__job_id=job_id,
+            )
+            .select_related("reservation")
+        }
+        if len(reservation_lines) != len(reservation_line_ids):
+            return JsonResponse(
+                {"detail": "One or more active job reservations were not found."},
+                status=404,
+            )
+        consumed = {
+            row["reservation_line_id"]: row["total"]
+            for row in JobMaterialIssueLine.objects.filter(
+                reservation_line_id__in=reservation_line_ids
+            )
+            .values("reservation_line_id")
+            .annotate(total=Sum("quantity"))
+        }
+        available_balances = available_stock_balances(organization_id)
+
         # All stock-changing endpoints lock the organization before evaluating balances.
         for line in values["lines"]:
             product = products[line["product_id"]]
             if _balance(product, line["location_id"]) < line["quantity"]:
                 return JsonResponse(
                     {"detail": f"Issue would make stock negative for {product.sku}."},
+                    status=409,
+                )
+            reservation_line_id = line.get("reservation_line_id")
+            if reservation_line_id is None:
+                if (
+                    available_balances.get(
+                        (product.pk, line["location_id"]), Decimal("0.000")
+                    )
+                    < line["quantity"]
+                ):
+                    return JsonResponse(
+                        {
+                            "detail": f"Issue would consume stock reserved for a job for {product.sku}."
+                        },
+                        status=409,
+                    )
+                continue
+
+            reservation_line = reservation_lines[reservation_line_id]
+            if (
+                reservation_line.product_id != product.pk
+                or reservation_line.location_id != line["location_id"]
+            ):
+                return JsonResponse(
+                    {"detail": "Reserved product and location must match the issue."},
+                    status=400,
+                )
+            remaining = reservation_line.quantity - consumed.get(
+                reservation_line_id, Decimal("0.000")
+            )
+            if remaining < line["quantity"]:
+                return JsonResponse(
+                    {"detail": "Issue exceeds the remaining reserved quantity."},
                     status=409,
                 )
 
@@ -540,6 +666,7 @@ def job_material_issues_view(request, organization_id, job_id):
                 base_unit=product.base_unit,
                 location_code=location.code,
                 quantity=line["quantity"],
+                reservation_line_id=line.get("reservation_line_id"),
             )
             StockMovement.objects.create(
                 organization_id=organization_id,
@@ -558,3 +685,220 @@ def job_material_issues_view(request, organization_id, job_id):
     ).data
     data["replayed"] = False
     return JsonResponse(data, status=201)
+
+
+def _reservation_data(reservation):
+    lines = list(
+        JobMaterialReservationLine.objects.filter(reservation=reservation).order_by(
+            "id"
+        )
+    )
+    issued = {
+        row["reservation_line_id"]: row["total"]
+        for row in JobMaterialIssueLine.objects.filter(
+            reservation_line_id__in=[line.pk for line in lines]
+        )
+        .values("reservation_line_id")
+        .annotate(total=Sum("quantity"))
+    }
+    return {
+        "id": reservation.pk,
+        "job_id": reservation.job_id,
+        "status": reservation.status,
+        "reason": reservation.reason,
+        "actor": reservation.actor.get_username(),
+        "idempotency_key": str(reservation.idempotency_key),
+        "created_at": reservation.created_at,
+        "released_by": (
+            reservation.released_by.get_username() if reservation.released_by else None
+        ),
+        "released_at": reservation.released_at,
+        "lines": [
+            {
+                "id": line.pk,
+                "product_id": line.product_id,
+                "location_id": line.location_id,
+                "product_sku": line.product_sku,
+                "product_name": line.product_name,
+                "base_unit": line.base_unit,
+                "location_code": line.location_code,
+                "quantity": format(line.quantity, ".3f"),
+                "issued_quantity": format(issued.get(line.pk, Decimal("0.000")), ".3f"),
+                "unissued_quantity": format(
+                    line.quantity - issued.get(line.pk, Decimal("0.000")), ".3f"
+                ),
+                "remaining_quantity": format(
+                    (
+                        line.quantity - issued.get(line.pk, Decimal("0.000"))
+                        if reservation.status == JobMaterialReservation.Status.ACTIVE
+                        else Decimal("0.000")
+                    ),
+                    ".3f",
+                ),
+            }
+            for line in lines
+        ],
+    }
+
+
+@require_http_methods(["GET", "POST"])
+def job_material_reservations_view(request, organization_id, job_id):
+    membership, error = _membership(
+        request, organization_id, write=request.method == "POST"
+    )
+    if error:
+        return error
+    if request.method == "GET":
+        if not Job.objects.filter(organization_id=organization_id, pk=job_id).exists():
+            return JsonResponse({"detail": "Job not found."}, status=404)
+        reservations = (
+            JobMaterialReservation.objects.filter(
+                organization_id=organization_id, job_id=job_id
+            )
+            .select_related("actor", "released_by")
+            .prefetch_related("lines")
+        )
+        return JsonResponse(
+            {"results": [_reservation_data(item) for item in reservations]}
+        )
+
+    values, error = _payload(request, JobMaterialReservationWriteSerializer)
+    if error:
+        return error
+    canonical = {
+        "reason": values["reason"],
+        "lines": [
+            {
+                "product_id": line["product_id"],
+                "location_id": line["location_id"],
+                "quantity": format(line["quantity"], "f"),
+            }
+            for line in values["lines"]
+        ],
+    }
+    signature = hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+    with transaction.atomic():
+        # Stock reservation writes serialize with all stock movements on this tenant.
+        Organization.objects.select_for_update().get(pk=organization_id)
+        existing = JobMaterialReservation.objects.filter(
+            organization_id=organization_id,
+            idempotency_key=values["idempotency_key"],
+        ).first()
+        if existing:
+            if existing.job_id != job_id or existing.request_signature != signature:
+                return JsonResponse(
+                    {"detail": "Reservation key was used for different data."},
+                    status=409,
+                )
+            data = _reservation_data(existing)
+            data["replayed"] = True
+            return JsonResponse(data)
+
+        job = (
+            Job.objects.select_for_update()
+            .filter(organization_id=organization_id, pk=job_id)
+            .first()
+        )
+        if job is None:
+            return JsonResponse({"detail": "Job not found."}, status=404)
+        product_ids = {line["product_id"] for line in values["lines"]}
+        products = {
+            product.pk: product
+            for product in Product.objects.select_for_update().filter(
+                organization_id=organization_id, pk__in=product_ids, is_active=True
+            )
+        }
+        if len(products) != len(product_ids):
+            return JsonResponse(
+                {"detail": "One or more active products were not found."}, status=404
+            )
+        location_ids = {line["location_id"] for line in values["lines"]}
+        locations = {
+            location.pk: location
+            for location in Location.objects.filter(
+                organization_id=organization_id, pk__in=location_ids, is_active=True
+            )
+        }
+        if len(locations) != len(location_ids):
+            return JsonResponse(
+                {"detail": "One or more active locations were not found."}, status=404
+            )
+
+        available = available_stock_balances(organization_id)
+        for line in values["lines"]:
+            key = (line["product_id"], line["location_id"])
+            if available.get(key, Decimal("0.000")) < line["quantity"]:
+                product = products[line["product_id"]]
+                return JsonResponse(
+                    {
+                        "detail": f"Insufficient unreserved stock for {product.sku} at the selected location."
+                    },
+                    status=409,
+                )
+
+        reservation = JobMaterialReservation.objects.create(
+            organization_id=organization_id,
+            job=job,
+            actor=request.user,
+            idempotency_key=values["idempotency_key"],
+            request_signature=signature,
+            reason=values["reason"],
+        )
+        for line in values["lines"]:
+            product = products[line["product_id"]]
+            location = locations[line["location_id"]]
+            JobMaterialReservationLine.objects.create(
+                reservation=reservation,
+                product=product,
+                location=location,
+                product_sku=product.sku,
+                product_name=product.name,
+                base_unit=product.base_unit,
+                location_code=location.code,
+                quantity=line["quantity"],
+            )
+
+    data = _reservation_data(
+        JobMaterialReservation.objects.select_related("actor", "released_by").get(
+            pk=reservation.pk
+        )
+    )
+    data["replayed"] = False
+    return JsonResponse(data, status=201)
+
+
+@require_http_methods(["POST"])
+def job_material_reservation_release_view(
+    request, organization_id, job_id, reservation_id
+):
+    _, error = _membership(request, organization_id, write=True)
+    if error:
+        return error
+    with transaction.atomic():
+        Organization.objects.select_for_update().get(pk=organization_id)
+        reservation = (
+            JobMaterialReservation.objects.select_for_update()
+            .filter(
+                organization_id=organization_id,
+                job_id=job_id,
+                pk=reservation_id,
+            )
+            .select_related("actor", "released_by")
+            .first()
+        )
+        if reservation is None:
+            return JsonResponse({"detail": "Reservation not found."}, status=404)
+        if reservation.status == JobMaterialReservation.Status.RELEASED:
+            data = _reservation_data(reservation)
+            data["replayed"] = True
+            return JsonResponse(data)
+        reservation.status = JobMaterialReservation.Status.RELEASED
+        reservation.released_by = request.user
+        reservation.released_at = timezone.now()
+        reservation.save(update_fields=["status", "released_by", "released_at"])
+    data = _reservation_data(reservation)
+    data["replayed"] = False
+    return JsonResponse(data)

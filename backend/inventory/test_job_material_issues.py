@@ -1,17 +1,27 @@
 import json
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from decimal import Decimal
+from threading import Barrier
+from unittest import skipUnless
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.db import close_old_connections, connection
+from django.test import TestCase, TransactionTestCase
 from django.urls import reverse
 
 from accounts.models import Membership, Organization
 from customers.models import Customer
 from quotations.models import Job, Quotation
 
-from .models import JobMaterialIssue, Location, Product, StockMovement
+from .models import (
+    JobMaterialIssue,
+    JobMaterialReservation,
+    Location,
+    Product,
+    StockMovement,
+)
 
 
 class JobMaterialIssueTests(TestCase):
@@ -91,6 +101,10 @@ class JobMaterialIssueTests(TestCase):
         self.issue_url = reverse(
             "job-material-issues", args=[self.organization.pk, self.job.pk]
         )
+        self.reservation_url = reverse(
+            "job-material-reservations", args=[self.organization.pk, self.job.pk]
+        )
+        self.movement_url = reverse("inventory-movements", args=[self.organization.pk])
         self.list_url = reverse("jobs", args=[self.organization.pk])
         self.inventory_url = reverse("inventory", args=[self.organization.pk])
         self.client.force_login(self.operations)
@@ -115,6 +129,28 @@ class JobMaterialIssueTests(TestCase):
         return self.client.post(
             self.issue_url, data=json.dumps(payload), content_type="application/json"
         )
+
+    def post_reservation(self, payload, *, user=None):
+        if user:
+            self.client.force_login(user)
+        return self.client.post(
+            self.reservation_url,
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+    def reservation_payload(self, *, key=None, quantity="5.000", product=None):
+        return {
+            "idempotency_key": str(key or uuid.uuid4()),
+            "reason": "Materials planned for installation",
+            "lines": [
+                {
+                    "product_id": (product or self.product).pk,
+                    "location_id": self.location.pk,
+                    "quantity": quantity,
+                }
+            ],
+        }
 
     def payload(self, *, key=None, lines=None, reason="Used during installation"):
         return {
@@ -272,3 +308,284 @@ class JobMaterialIssueTests(TestCase):
                     ).count(),
                     movement_count,
                 )
+
+    def test_reservations_reduce_available_stock_and_allow_partial_consumption(self):
+        payload = self.reservation_payload()
+        response = self.post_reservation(payload)
+        self.assertEqual(response.status_code, 201, response.content)
+        reservation = JobMaterialReservation.objects.get()
+        self.assertEqual(response.json()["status"], "active")
+        self.assertEqual(response.json()["lines"][0]["remaining_quantity"], "5.000")
+
+        replay = self.post_reservation(payload)
+        self.assertEqual(replay.status_code, 200)
+        self.assertTrue(replay.json()["replayed"])
+        self.assertEqual(JobMaterialReservation.objects.count(), 1)
+
+        inventory_product = next(
+            item
+            for item in self.client.get(self.inventory_url).json()["products"]
+            if item["id"] == self.product.pk
+        )
+        balance = inventory_product["balances"][0]
+        self.assertEqual(balance["quantity"], "8.000")
+        self.assertEqual(balance["reserved_quantity"], "5.000")
+        self.assertEqual(balance["available_quantity"], "3.000")
+
+        generic_issue = self.client.post(
+            self.movement_url,
+            data=json.dumps(
+                {
+                    "product_id": self.product.pk,
+                    "location_id": self.location.pk,
+                    "kind": "issue",
+                    "quantity": "4.000",
+                    "reason": "Try to consume reserved stock",
+                    "idempotency_key": str(uuid.uuid4()),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(generic_issue.status_code, 409)
+        second_location = Location.objects.create(
+            organization=self.organization,
+            code="SECOND",
+            name="Second store",
+            created_by=self.owner,
+        )
+        for movement in (
+            {
+                "kind": "adjustment",
+                "direction": "decrease",
+                "quantity": "4.000",
+            },
+            {
+                "kind": "transfer",
+                "destination_id": second_location.pk,
+                "quantity": "4.000",
+            },
+        ):
+            blocked = self.client.post(
+                self.movement_url,
+                data=json.dumps(
+                    {
+                        "product_id": self.product.pk,
+                        "location_id": self.location.pk,
+                        "reason": "Try to consume reserved stock",
+                        "idempotency_key": str(uuid.uuid4()),
+                        **movement,
+                    }
+                ),
+                content_type="application/json",
+            )
+            self.assertEqual(blocked.status_code, 409)
+
+        reservation_line_id = response.json()["lines"][0]["id"]
+        issue_payload = self.payload(
+            lines=[
+                {
+                    "product_id": self.product.pk,
+                    "location_id": self.location.pk,
+                    "reservation_line_id": reservation_line_id,
+                    "quantity": "2.000",
+                }
+            ]
+        )
+        issue_response = self.post_issue(issue_payload)
+        self.assertEqual(issue_response.status_code, 201, issue_response.content)
+        self.assertEqual(
+            issue_response.json()["lines"][0]["reservation_line_id"],
+            reservation_line_id,
+        )
+        self.assertEqual(self.post_issue(issue_payload).json()["replayed"], True)
+
+        job_reservations = self.client.get(self.reservation_url).json()["results"]
+        self.assertEqual(job_reservations[0]["lines"][0]["issued_quantity"], "2.000")
+        self.assertEqual(job_reservations[0]["lines"][0]["remaining_quantity"], "3.000")
+
+        available_issue = self.client.post(
+            self.movement_url,
+            data=json.dumps(
+                {
+                    "product_id": self.product.pk,
+                    "location_id": self.location.pk,
+                    "kind": "issue",
+                    "quantity": "3.000",
+                    "reason": "Use unreserved stock",
+                    "idempotency_key": str(uuid.uuid4()),
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(available_issue.status_code, 201, available_issue.content)
+
+        direct_issue = self.post_issue(
+            self.payload(
+                lines=[
+                    {
+                        "product_id": self.product.pk,
+                        "location_id": self.location.pk,
+                        "quantity": "4.000",
+                    }
+                ]
+            )
+        )
+        self.assertEqual(direct_issue.status_code, 409)
+
+        release_url = reverse(
+            "job-material-reservation-release",
+            args=[self.organization.pk, self.job.pk, reservation.pk],
+        )
+        released = self.client.post(
+            release_url, data="{}", content_type="application/json"
+        )
+        self.assertEqual(released.status_code, 200)
+        self.assertEqual(released.json()["status"], "released")
+        release_replay = self.client.post(
+            release_url, data="{}", content_type="application/json"
+        )
+        self.assertTrue(release_replay.json()["replayed"])
+
+
+@skipUnless(
+    connection.features.has_select_for_update,
+    "The configured test database does not support row-level locking.",
+)
+class InventoryReservationConcurrencyTests(TransactionTestCase):
+    reset_sequences = True
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.owner = user_model.objects.create_user(username="reservation-lock-owner")
+        self.operations = user_model.objects.create_user(
+            username="reservation-lock-ops"
+        )
+        self.organization = Organization.objects.create(name="Reservation Lock Org")
+        for user, role in (
+            (self.owner, Membership.Role.OWNER),
+            (self.operations, Membership.Role.OPERATIONS),
+        ):
+            Membership.objects.create(
+                organization=self.organization, user=user, role=role
+            )
+        customer = Customer.objects.create(
+            organization=self.organization,
+            name="Reservation Lock Customer",
+            created_by=self.owner,
+        )
+        quotation = Quotation.objects.create(
+            organization=self.organization,
+            customer=customer,
+            currency="KES",
+            valid_until=date.today() + timedelta(days=7),
+            created_by=self.owner,
+            status=Quotation.Status.ACCEPTED,
+        )
+        self.job = Job.objects.create(
+            organization=self.organization,
+            customer=customer,
+            source_quotation=quotation,
+            created_by=self.owner,
+        )
+        self.product = Product.objects.create(
+            organization=self.organization,
+            sku="RES-LOCK-1",
+            name="Reservation Lock Item",
+            base_unit="ea",
+            created_by=self.owner,
+        )
+        self.location = Location.objects.create(
+            organization=self.organization,
+            code="RES-LOCK",
+            name="Reservation Lock Location",
+            created_by=self.owner,
+        )
+        StockMovement.objects.create(
+            organization=self.organization,
+            product=self.product,
+            kind=StockMovement.Kind.RECEIPT,
+            location=self.location,
+            quantity=Decimal("1.000"),
+            reason="Synthetic concurrency-test opening stock",
+            idempotency_key=uuid.uuid4(),
+            actor=self.owner,
+        )
+        self.url = reverse(
+            "job-material-reservations", args=[self.organization.pk, self.job.pk]
+        )
+
+    def test_concurrent_reservations_cannot_double_allocate_stock(self):
+        barrier = Barrier(2)
+
+        def reserve(user):
+            close_old_connections()
+            try:
+                client = self.client_class()
+                client.force_login(user)
+                barrier.wait(timeout=10)
+                response = client.post(
+                    self.url,
+                    data=json.dumps(
+                        {
+                            "idempotency_key": str(uuid.uuid4()),
+                            "reason": "Concurrent planned work",
+                            "lines": [
+                                {
+                                    "product_id": self.product.pk,
+                                    "location_id": self.location.pk,
+                                    "quantity": "0.750",
+                                }
+                            ],
+                        }
+                    ),
+                    content_type="application/json",
+                )
+                return response.status_code
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(reserve, user) for user in (self.owner, self.operations)
+            ]
+            statuses = sorted(future.result(timeout=30) for future in futures)
+        self.assertEqual(statuses, [201, 409])
+        self.assertEqual(
+            JobMaterialReservation.objects.filter(
+                organization=self.organization,
+                status=JobMaterialReservation.Status.ACTIVE,
+            ).count(),
+            1,
+        )
+
+    def test_reservations_reject_overcommit_float_and_foreign_objects(self):
+        self.assertEqual(
+            self.post_reservation(
+                self.reservation_payload(quantity="8.001")
+            ).status_code,
+            409,
+        )
+        floating = self.reservation_payload()
+        floating["lines"][0]["quantity"] = 2.5
+        self.assertEqual(self.post_reservation(floating).status_code, 400)
+        foreign = self.reservation_payload(product=self.other_product)
+        self.assertEqual(self.post_reservation(foreign).status_code, 404)
+        self.assertEqual(JobMaterialReservation.objects.count(), 0)
+
+    def test_reservation_read_and_write_permissions_are_scoped(self):
+        self.assertEqual(
+            self.post_reservation(
+                self.reservation_payload(), user=self.finance
+            ).status_code,
+            403,
+        )
+        denied_read = self.client.get(self.reservation_url)
+        self.assertEqual(denied_read.status_code, 200)
+        self.client.force_login(self.employee)
+        self.assertEqual(self.client.get(self.reservation_url).status_code, 403)
+        foreign_url = reverse(
+            "job-material-reservations",
+            args=[self.other_organization.pk, self.job.pk],
+        )
+        self.client.force_login(self.other_owner)
+        self.assertEqual(self.client.get(foreign_url).status_code, 404)

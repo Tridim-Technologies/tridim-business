@@ -188,6 +188,13 @@ class JobMaterialIssueLine(models.Model):
     location = models.ForeignKey(
         Location, on_delete=models.PROTECT, related_name="job_material_issue_lines"
     )
+    reservation_line = models.ForeignKey(
+        "inventory.JobMaterialReservationLine",
+        on_delete=models.PROTECT,
+        related_name="material_issue_lines",
+        null=True,
+        blank=True,
+    )
     product_sku = models.CharField(max_length=64)
     product_name = models.CharField(max_length=160)
     base_unit = models.CharField(max_length=16)
@@ -201,4 +208,78 @@ class JobMaterialIssueLine(models.Model):
             models.CheckConstraint(
                 condition=models.Q(quantity__gt=0), name="job_material_qty_positive"
             )
+        ]
+
+
+class JobMaterialReservation(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        RELEASED = "released", "Released"
+
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="job_material_reservations"
+    )
+    job = models.ForeignKey(
+        "quotations.Job", on_delete=models.PROTECT, related_name="material_reservations"
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="job_material_reservations",
+    )
+    released_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="released_job_material_reservations",
+        null=True,
+        blank=True,
+    )
+    idempotency_key = models.UUIDField()
+    request_signature = models.CharField(max_length=64)
+    reason = models.CharField(max_length=500)
+    status = models.CharField(
+        max_length=8, choices=Status.choices, default=Status.ACTIVE
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    released_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "idempotency_key"],
+                name="job_material_reserve_request_uniq",
+            )
+        ]
+
+
+class JobMaterialReservationLine(models.Model):
+    reservation = models.ForeignKey(
+        JobMaterialReservation, on_delete=models.CASCADE, related_name="lines"
+    )
+    product = models.ForeignKey(
+        Product, on_delete=models.PROTECT, related_name="job_material_reservation_lines"
+    )
+    location = models.ForeignKey(
+        Location,
+        on_delete=models.PROTECT,
+        related_name="job_material_reservation_lines",
+    )
+    product_sku = models.CharField(max_length=64)
+    product_name = models.CharField(max_length=160)
+    base_unit = models.CharField(max_length=16)
+    location_code = models.CharField(max_length=32)
+    quantity = models.DecimalField(max_digits=18, decimal_places=3)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["reservation", "product", "location"],
+                name="job_reservation_product_location_uniq",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0), name="job_reservation_qty_positive"
+            ),
         ]

@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.db.models import BigIntegerField, Case, F, Q, Sum, When
 
-from .models import StockMovement
+from .models import JobMaterialIssueLine, JobMaterialReservationLine, StockMovement
 
 
 def location_stock_balances(organization_id):
@@ -54,3 +54,34 @@ def product_stock_totals(organization_id):
     ).items():
         totals[product_id] = totals.get(product_id, Decimal("0")) + quantity
     return totals
+
+
+def location_reserved_balances(organization_id):
+    active_lines = JobMaterialReservationLine.objects.filter(
+        reservation__organization_id=organization_id,
+        reservation__status="active",
+    ).values_list("id", "product_id", "location_id", "quantity")
+    consumed = {
+        row["reservation_line_id"]: row["total"]
+        for row in JobMaterialIssueLine.objects.filter(
+            reservation_line__reservation__organization_id=organization_id,
+            reservation_line__reservation__status="active",
+        )
+        .values("reservation_line_id")
+        .annotate(total=Sum("quantity"))
+    }
+    totals = {}
+    for line_id, product_id, location_id, quantity in active_lines:
+        remaining = quantity - consumed.get(line_id, Decimal("0.000"))
+        key = (product_id, location_id)
+        totals[key] = totals.get(key, Decimal("0.000")) + remaining
+    return totals
+
+
+def available_stock_balances(organization_id):
+    stock = location_stock_balances(organization_id)
+    reserved = location_reserved_balances(organization_id)
+    return {
+        key: quantity - reserved.get(key, Decimal("0.000"))
+        for key, quantity in stock.items()
+    }
