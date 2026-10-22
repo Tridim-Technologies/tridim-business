@@ -63,6 +63,8 @@ from inventory.views import (
     inventory_products_view,
     inventory_view,
     job_material_issues_view,
+    job_material_reservation_release_view,
+    job_material_reservations_view,
 )
 from purchasing.views import (
     purchase_order_cancel_view,
@@ -240,6 +242,16 @@ urlpatterns = [
         "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/material-issues/",
         job_material_issues_view,
         name="job-material-issues",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/material-reservations/",
+        job_material_reservations_view,
+        name="job-material-reservations",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/material-reservations/<int:reservation_id>/release/",
+        job_material_reservation_release_view,
+        name="job-material-reservation-release",
     ),
     path(
         "api/organizations/<uuid:organization_id>/jobs/<int:job_id>/assignments/",

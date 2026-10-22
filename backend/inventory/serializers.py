@@ -118,6 +118,7 @@ class JobMaterialIssueLineWriteSerializer(StrictSerializer):
     quantity = serializers.DecimalField(
         max_digits=18, decimal_places=3, min_value=Decimal("0.001")
     )
+    reservation_line_id = serializers.IntegerField(min_value=1, required=False)
 
 
 class JobMaterialIssueWriteSerializer(StrictSerializer):
@@ -145,6 +146,39 @@ class JobMaterialIssueWriteSerializer(StrictSerializer):
         return lines
 
 
+class JobMaterialReservationLineWriteSerializer(StrictSerializer):
+    product_id = serializers.IntegerField(min_value=1)
+    location_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.DecimalField(
+        max_digits=18, decimal_places=3, min_value=Decimal("0.001")
+    )
+
+
+class JobMaterialReservationWriteSerializer(StrictSerializer):
+    idempotency_key = serializers.UUIDField()
+    reason = serializers.CharField(max_length=500, min_length=3, trim_whitespace=True)
+    lines = JobMaterialReservationLineWriteSerializer(
+        many=True, allow_empty=False, max_length=100
+    )
+
+    def validate_lines(self, lines):
+        raw_lines = self.initial_data.get("lines", [])
+        if any(
+            isinstance(raw.get("quantity"), float)
+            for raw in raw_lines
+            if isinstance(raw, dict)
+        ):
+            raise serializers.ValidationError(
+                "Send quantity as an exact decimal string."
+            )
+        pairs = [(line["product_id"], line["location_id"]) for line in lines]
+        if len(pairs) != len(set(pairs)):
+            raise serializers.ValidationError(
+                "A product and location may appear only once per reservation."
+            )
+        return lines
+
+
 class JobMaterialIssueLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = JobMaterialIssueLine
@@ -157,6 +191,7 @@ class JobMaterialIssueLineSerializer(serializers.ModelSerializer):
             "location_id",
             "location_code",
             "quantity",
+            "reservation_line_id",
             "created_at",
         )
 

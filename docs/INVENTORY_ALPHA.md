@@ -1,6 +1,6 @@
 # Inventory in the synthetic alpha
 
-**Status:** Local product and stock tracking; no costing or accounting integration
+**Status:** Local product, stock availability, and job reservation tracking; no costing or accounting integration
 
 The inventory screen provides an organization-scoped catalog, stock locations, on-hand quantities, and a recent movement history. The current increment is intended for synthetic data while the core workflow is being built.
 
@@ -25,7 +25,13 @@ Each movement is immutable and records the product, quantity, actor, time, reaso
 
 Quantities use decimal precision of three places. Receipts and increases establish stock; issues, decreases, and transfers are rejected if they would produce a negative quantity. Repeating a request with the same organization-scoped idempotency key and same payload returns the original movement. Reusing the key for different movement data returns a conflict.
 
-On-hand quantities are calculated from movement history and returned per location and as an organization-wide total. Products below a positive reorder point appear in the low-stock view. Corrections are new compensating movements; existing events are not edited or deleted through the API.
+On-hand quantities are calculated from movement history and returned per location and as an organization-wide total. Active job reservations reduce available stock without changing on-hand quantity. Available quantity is `on hand - active reservations` for each product and location. Direct issues, adjustment decreases, and transfers are rejected when they would consume a reserved quantity. Receipts increase on-hand and therefore available stock. Products below a positive reorder point appear in the low-stock view. Corrections are new compensating movements; existing events are not edited or deleted through the API.
+
+## Reserve materials for a job
+
+Owners, administrators, and operations members can create a location-specific reservation for active products on a job in the same organization. Reservation quantities use exact decimal strings with three places. The server checks and records the request atomically under the same organization lock used by stock movements, so concurrent reservations cannot allocate the same available units twice.
+
+Reservations are immutable after creation. If a plan changes, explicitly release its unused quantities and create a replacement reservation; prior reservation records remain visible. A material issue can reference one or more active reservation lines for that job. Partial use reduces the line's remaining reserved quantity and creates the ordinary immutable issue movement. Issues without a reservation reference can use only unreserved available stock. Releasing a reservation does not change on-hand quantity.
 
 ## Issue materials to a job
 
@@ -36,6 +42,7 @@ This records consumption after it occurs. It does not reserve stock, allocate ma
 ## Access
 
 - Owners, administrators, and operations members can create and update products, create locations, and record stock movements.
+- Owners, administrators, and operations members can create and release job material reservations and issue reserved materials.
 - Owners, administrators, operations, sales, and finance members can view inventory.
 - Other roles cannot read the inventory API.
 - Every API query scopes products, locations, movements, and identifiers to the selected organization.
@@ -51,9 +58,11 @@ This records consumption after it occurs. It does not reserve stock, allocate ma
 | `/api/organizations/{organization_id}/inventory/locations/{location_id}/` | PATCH | Update a location; deactivation requires zero stock |
 | `/api/organizations/{organization_id}/inventory/movements/` | GET, POST | List recent movements or record one movement |
 | `/api/organizations/{organization_id}/jobs/{job_id}/material-issues/` | POST | Record quantity-only stock issue lines against a job |
+| `/api/organizations/{organization_id}/jobs/{job_id}/material-reservations/` | GET, POST | Read job reservations or reserve available product quantities by location |
+| `/api/organizations/{organization_id}/jobs/{job_id}/material-reservations/{reservation_id}/release/` | POST | Release an active reservation's unused quantities |
 
 Product create/update requests can include `reorder_point` as a non-negative decimal string. Movement requests include `product_id`, `kind`, `location_id`, a positive decimal `quantity`, a reason, and a UUID `idempotency_key`. Transfers also require `destination_id`; adjustments require `direction` (`increase` or `decrease`). Quantities should be sent as decimal strings, not floating-point JSON numbers.
 
 ## Scope limits and follow-up
 
-Supplier orders and partial receiving are documented separately in [Supplier orders and stock receiving](PURCHASING_ALPHA.md). Job material issue payloads contain `idempotency_key`, `reason`, and `lines`; each line contains `product_id`, `location_id`, and a positive decimal-string `quantity` with three decimal places. Inventory remains quantity-only: it does not implement sales orders, reservations, bundles, serial or batch tracking, unit conversions, costing, valuation, tax, invoice integration, or general-ledger posting. No hosted deployment or real business data is part of this increment.
+Supplier orders and partial receiving are documented separately in [Supplier orders and stock receiving](PURCHASING_ALPHA.md). Job material issue payloads contain `idempotency_key`, `reason`, and `lines`; each line contains `product_id`, `location_id`, and a positive decimal-string `quantity` with three decimal places; use `reservation_line_id` to consume an active job reservation. Reservation requests use `idempotency_key`, `reason`, and similarly shaped `lines`. Inventory remains quantity-only: it does not implement bundles, serial or batch tracking, unit conversions, costing, valuation, tax, invoice integration, or general-ledger posting. No hosted deployment or real business data is part of this increment.

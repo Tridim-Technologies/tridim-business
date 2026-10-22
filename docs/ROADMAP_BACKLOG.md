@@ -2,7 +2,7 @@
 
 **Status:** Founder-directed starting scope; market fit and production readiness are not validated
 
-**Last updated:** 21 October 2026
+**Last updated:** 22 October 2026
 
 This backlog turns the existing product plan into an implementation sequence. It does not represent customer commitments or a delivery date.
 
@@ -40,6 +40,8 @@ This backlog turns the existing product plan into an implementation sequence. It
 **Job material usage increment:** Issue #109 records quantity-only stock issues against organization jobs. Immutable job issue history links to inventory movements and is visible from the job and inventory views. Stock is reduced immediately; reservations, costing, valuation, invoicing, and accounting are not included. See [Synthetic Inventory Alpha](INVENTORY_ALPHA.md).
 
 **Inventory reorder increment:** Issue #115 adds product-level reorder points, aggregate on-hand visibility, and purchasing suggestions that subtract outstanding incoming quantities. Managers can prefill an editable supplier-order draft and must choose the supplier; nothing is issued automatically. See [Synthetic Inventory Alpha](INVENTORY_ALPHA.md) and [Supplier orders and stock receiving](PURCHASING_ALPHA.md).
+
+**Job material reservation increment:** Issue #119 adds tenant-scoped, location-specific reservations, explicit release, partial consumption through job material issues, and available-stock protection against other stock decreases. Reservation changes share the organization lock used by stock movements. See [Synthetic Inventory Alpha](INVENTORY_ALPHA.md).
 
 ## P3 — Payments and reconciliation
 
