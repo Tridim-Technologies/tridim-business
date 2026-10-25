@@ -43,6 +43,8 @@ This backlog turns the existing product plan into an implementation sequence. It
 
 **Job material reservation increment:** Issue #119 adds tenant-scoped, location-specific reservations, explicit release, partial consumption through job material issues, and available-stock protection against other stock decreases. Reservation changes share the organization lock used by stock movements. See [Synthetic Inventory Alpha](INVENTORY_ALPHA.md).
 
+**Merchant storefront catalog increment:** Issue #130 adds an optional public, read-only merchant catalog with owner/admin-managed storefront profiles, explicit product publication, tenant-scoped anonymous reads, and a separate responsive storefront route. Cart, checkout, customer accounts, orders, payments, stock reservation, product images, and custom domains are not included.
+
 ## P3 — Payments and reconciliation
 
 - Begin with explicit manual payment recording and allocation.
@@ -64,4 +66,4 @@ Before real business data is introduced, choose the actual region and database s
 
 ## Later candidates, not committed scope
 
-Merchant-owned storefronts, inventory, POS, purchasing, recurring billing, advanced HR/attendance, recruitment, payroll, native apps, analytics, marketplace, and multi-country tax/payroll remain future candidates. Reprioritize them only when implementation learning, available information, specialist review, and delivery capacity justify the work.
+Full commerce beyond the read-only merchant catalog, POS, recurring billing, advanced HR/attendance, recruitment, payroll, native apps, analytics, marketplace, and multi-country tax/payroll remain future candidates. Reprioritize them only when implementation learning, available information, specialist review, and delivery capacity justify the work.

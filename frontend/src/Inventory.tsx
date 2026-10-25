@@ -8,6 +8,9 @@ type Product = {
   name: string
   base_unit: string
   reorder_point: string
+  storefront_description: string
+  storefront_price: string | null
+  is_published: boolean
   on_hand_quantity: string
   reserved_quantity: string
   available_quantity: string
@@ -34,6 +37,7 @@ type Movement = {
   created_at: string
 }
 type InventoryData = { products: Product[]; locations: Location[]; movements: Movement[] }
+type StorefrontProfile = { slug: string; display_name: string; currency: string; is_published: boolean }
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
@@ -62,8 +66,9 @@ function milliunits(value: string): bigint {
   return BigInt(whole || '0') * 1000n + BigInt((fraction + '000').slice(0, 3))
 }
 
-export default function Inventory({ organization, canManage, onOpenPurchasing }: { organization: string; canManage: boolean; onOpenPurchasing: () => void }) {
+export default function Inventory({ organization, canManage, canManageStorefront, onOpenPurchasing }: { organization: string; canManage: boolean; canManageStorefront: boolean; onOpenPurchasing: () => void }) {
   const [data, setData] = useState<InventoryData>({ products: [], locations: [], movements: [] })
+  const [storefront, setStorefront] = useState<StorefrontProfile | null>(null)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const movementKeys = useRef(new Map<string, string>())
@@ -71,8 +76,12 @@ export default function Inventory({ organization, canManage, onOpenPurchasing }:
 
   const refresh = useCallback(async () => {
     if (!organization) return
-    const next = await api<InventoryData>(base)
+    const [next, profileData] = await Promise.all([
+      api<InventoryData>(base),
+      api<{ profile: StorefrontProfile | null }>(`/api/organizations/${organization}/storefront/`),
+    ])
     setData(next)
+    setStorefront(profileData.profile)
     setError('')
   }, [base, organization])
 
@@ -99,11 +108,35 @@ export default function Inventory({ organization, canManage, onOpenPurchasing }:
     const form = new FormData(event.currentTarget)
     setSaving(true); setError('')
     try {
+      const payload: Record<string, unknown> = { sku: form.get('sku'), name: form.get('name'), base_unit: form.get('base_unit'), reorder_point: String(form.get('reorder_point') || '0.000'), is_active: form.get('is_active') === 'on' }
+      if (canManageStorefront) {
+        payload.storefront_description = form.get('storefront_description')
+        payload.storefront_price = String(form.get('storefront_price') || '') || null
+        payload.is_published = form.get('is_published') === 'on'
+      }
       await api(`${base}products/${product.id}/`, {
         method: 'PATCH', headers: csrfHeader(),
-        body: JSON.stringify({ sku: form.get('sku'), name: form.get('name'), base_unit: form.get('base_unit'), reorder_point: String(form.get('reorder_point') || '0.000'), is_active: form.get('is_active') === 'on' }),
+        body: JSON.stringify(payload),
       })
       await refresh()
+    } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
+  }
+
+  async function saveStorefront(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    setSaving(true); setError('')
+    try {
+      const result = await api<{ profile: StorefrontProfile }>(`/api/organizations/${organization}/storefront/`, {
+        method: 'PUT', headers: csrfHeader(),
+        body: JSON.stringify({
+          slug: String(form.get('slug')).trim().toLowerCase(),
+          display_name: form.get('display_name'),
+          currency: String(form.get('currency')).trim().toUpperCase(),
+          is_published: form.get('is_published') === 'on',
+        }),
+      })
+      setStorefront(result.profile)
     } catch (reason) { setError((reason as Error).message) } finally { setSaving(false) }
   }
 
@@ -179,6 +212,16 @@ export default function Inventory({ organization, canManage, onOpenPurchasing }:
     <div className="page-heading"><div><p className="eyebrow">OPERATIONS</p><h1>Inventory</h1><p className="muted">Track product quantities across locations through recorded stock movements.</p></div><span className="count-pill">{data.products.length} {data.products.length === 1 ? 'product' : 'products'}</span></div>
     {error && <div className="alert inline-alert">{error}</div>}
     <p className="expense-notice">Synthetic product and quantity tracking only. Stock movements do not calculate value, taxes, accounting entries, or sales orders.</p>
+    {canManageStorefront && <section className="panel add-panel inventory-storefront-panel"><div className="panel-heading"><div><h2>Public storefront</h2><p>Show selected active products in a separate read-only catalog. Orders and payments are not enabled.</p></div><span className={`count-pill ${storefront?.is_published ? 'storefront-live' : ''}`}>{storefront?.is_published ? 'Published' : 'Unpublished'}</span></div>
+      <form className="inventory-storefront-form" onSubmit={saveStorefront}>
+        <label>Public store name<input name="display_name" defaultValue={storefront?.display_name || ''} minLength={2} maxLength={120} required /></label>
+        <label>Catalog URL slug<input name="slug" defaultValue={storefront?.slug || ''} pattern="[a-z0-9]+(-[a-z0-9]+)*" maxLength={64} placeholder="example-business" required /></label>
+        <label>Currency code<input name="currency" defaultValue={storefront?.currency || 'KES'} pattern="[A-Z]{3}" maxLength={3} required /><span className="form-note">One currency is used for all listed products.</span></label>
+        <label className="inventory-checkbox"><input type="checkbox" name="is_published" defaultChecked={storefront?.is_published || false} /> Publish this catalog</label>
+        <button className="primary" disabled={saving}>{storefront ? 'Save storefront' : 'Create storefront'}</button>
+      </form>
+      {storefront?.is_published && <p className="form-note">Public catalog: <a href={`/store/${storefront.slug}/`} target="_blank" rel="noreferrer">{window.location.origin}/store/{storefront.slug}/</a></p>}
+    </section>}
     {canManage && <div className="inventory-setup-grid">
       <section className="panel add-panel"><div className="panel-heading"><div><h2>Add a product</h2><p>SKU is unique within this organization. Price and tax are not captured.</p></div></div>
         <form className="stack-form" onSubmit={createProduct}><label>SKU<input name="sku" maxLength={64} pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,63}" required /></label><label>Product name<input name="name" minLength={2} maxLength={160} required /></label><label>Base unit<input name="base_unit" placeholder="ea, kg, l" maxLength={16} pattern="[A-Za-z0-9._-]{1,16}" required /></label><label>Reorder point<input name="reorder_point" type="number" min="0" step="0.001" defaultValue="0.000" required /><span className="form-note">Total on-hand level that triggers a reorder suggestion. Zero disables it.</span></label><button className="primary" disabled={saving}>Add product <span>＋</span></button></form>
@@ -189,7 +232,7 @@ export default function Inventory({ organization, canManage, onOpenPurchasing }:
       </section>
     </div>}
     <section className="panel inventory-register"><div className="panel-heading"><div><h2>Stock availability</h2><p>On-hand comes from movement history. Reservations protect planned job quantities; available stock is on-hand minus active reservations.</p></div></div>
-      {data.products.length && data.locations.length ? <div className="table-scroll"><table><thead><tr><th>SKU</th><th>Product</th><th>Total on hand</th><th>Reserved</th><th>Available</th><th>Reorder point</th>{data.locations.map((location) => <th key={location.id}>{location.code} · {location.name}<br />On hand / reserved / available</th>)}{canManage && <th>Actions</th>}</tr></thead><tbody>{data.products.map((product) => <tr key={product.id}><td>{product.sku}</td><td>{product.name} <span className="quote-id">({product.base_unit}){!product.is_active ? ' · inactive' : ''}</span></td><td>{product.on_hand_quantity}</td><td>{product.reserved_quantity}</td><td>{product.available_quantity}</td><td>{product.reorder_point === '0.000' ? 'Not tracked' : product.reorder_point}</td>{data.locations.map((location) => { const balance = product.balances.find((item) => item.location_id === location.id); return <td key={location.id}>{balance?.quantity || '0.000'} / {balance?.reserved_quantity || '0.000'} / {balance?.available_quantity || '0.000'}</td> })}{canManage && <td><details><summary>Edit</summary><form className="stack-form" onSubmit={(event) => updateProduct(event, product)}><label>SKU<input name="sku" defaultValue={product.sku} maxLength={64} required /></label><label>Name<input name="name" defaultValue={product.name} maxLength={160} required /></label><label>Base unit<input name="base_unit" defaultValue={product.base_unit} maxLength={16} required /></label><label>Reorder point<input name="reorder_point" type="number" min="0" step="0.001" defaultValue={product.reorder_point} required /></label><label className="inventory-checkbox"><input type="checkbox" name="is_active" defaultChecked={product.is_active} /> Active</label><button className="quiet-action" disabled={saving}>Save product</button></form></details></td>}</tr>)}</tbody></table></div> : <div className="empty-state"><strong>{data.products.length ? 'Add a location to see stock by location' : 'Add a product to start tracking stock'}</strong><p>Every quantity change is recorded in the movement history.</p></div>}
+      {data.products.length && data.locations.length ? <div className="table-scroll"><table><thead><tr><th>SKU</th><th>Product</th><th>Total on hand</th><th>Reserved</th><th>Available</th><th>Reorder point</th>{canManageStorefront && <th>Public catalog</th>}{data.locations.map((location) => <th key={location.id}>{location.code} · {location.name}<br />On hand / reserved / available</th>)}{canManage && <th>Actions</th>}</tr></thead><tbody>{data.products.map((product) => <tr key={product.id}><td>{product.sku}</td><td>{product.name} <span className="quote-id">({product.base_unit}){!product.is_active ? ' · inactive' : ''}</span></td><td>{product.on_hand_quantity}</td><td>{product.reserved_quantity}</td><td>{product.available_quantity}</td><td>{product.reorder_point === '0.000' ? 'Not tracked' : product.reorder_point}</td>{canManageStorefront && <td>{product.is_published && product.is_active ? 'Published' : 'Hidden'}</td>}{data.locations.map((location) => { const balance = product.balances.find((item) => item.location_id === location.id); return <td key={location.id}>{balance?.quantity || '0.000'} / {balance?.reserved_quantity || '0.000'} / {balance?.available_quantity || '0.000'}</td> })}{canManage && <td><details><summary>Edit</summary><form className="stack-form" onSubmit={(event) => updateProduct(event, product)}><label>SKU<input name="sku" defaultValue={product.sku} maxLength={64} required /></label><label>Name<input name="name" defaultValue={product.name} maxLength={160} required /></label><label>Base unit<input name="base_unit" defaultValue={product.base_unit} maxLength={16} required /></label><label>Reorder point<input name="reorder_point" type="number" min="0" step="0.001" defaultValue={product.reorder_point} required /></label>{canManageStorefront && <><label>Public description<textarea name="storefront_description" defaultValue={product.storefront_description} maxLength={5000} rows={4} /></label><label>Public price ({storefront?.currency || 'store currency'})<input name="storefront_price" type="number" min="0" step="0.01" defaultValue={product.storefront_price || ''} /></label><label className="inventory-checkbox"><input type="checkbox" name="is_published" defaultChecked={product.is_published} /> List in public catalog</label></>}<label className="inventory-checkbox"><input type="checkbox" name="is_active" defaultChecked={product.is_active} /> Active</label><button className="quiet-action" disabled={saving}>Save product</button></form></details></td>}</tr>)}</tbody></table></div> : <div className="empty-state"><strong>{data.products.length ? 'Add a location to see stock by location' : 'Add a product to start tracking stock'}</strong><p>Every quantity change is recorded in the movement history.</p></div>}
     </section>
     {data.products.some((product) => milliunits(product.reorder_point) > 0n) && <section className="panel inventory-register"><div className="panel-heading"><div><h2>Below reorder point</h2><p>Products below their total on-hand threshold. Purchasing suggestions also account for incoming order quantities.</p></div>{canManage && <button className="quiet-action" onClick={onOpenPurchasing}>Review reorder suggestions</button>}</div>
       {lowStockProducts.length ? <div className="table-scroll"><table><thead><tr><th>SKU</th><th>Product</th><th>Total on hand</th><th>Reorder point</th></tr></thead><tbody>{lowStockProducts.map((product) => <tr key={product.id}><td>{product.sku}</td><td>{product.name} ({product.base_unit})</td><td>{product.on_hand_quantity}</td><td>{product.reorder_point}</td></tr>)}</tbody></table></div> : <div className="empty-state"><strong>All tracked products are at or above their reorder points</strong></div>}

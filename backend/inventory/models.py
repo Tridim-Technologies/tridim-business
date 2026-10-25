@@ -17,6 +17,11 @@ class Product(models.Model):
     reorder_point = models.DecimalField(
         max_digits=18, decimal_places=3, default=Decimal("0.000")
     )
+    storefront_description = models.TextField(blank=True, default="")
+    storefront_price = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    is_published = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -36,6 +41,41 @@ class Product(models.Model):
                 condition=models.Q(reorder_point__gte=0),
                 name="inventory_reorder_point_nonnegative",
             ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(storefront_price__isnull=True)
+                    | models.Q(storefront_price__gte=0)
+                ),
+                name="inventory_storefront_price_nonnegative",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(is_published=False)
+                    | (
+                        ~models.Q(storefront_description="")
+                        & models.Q(storefront_price__isnull=False)
+                    )
+                ),
+                name="inventory_published_product_complete",
+            ),
+        ]
+
+
+class StorefrontProfile(models.Model):
+    organization = models.OneToOneField(
+        Organization, on_delete=models.CASCADE, related_name="storefront_profile"
+    )
+    slug = models.SlugField(max_length=64)
+    display_name = models.CharField(max_length=120)
+    currency = models.CharField(max_length=3)
+    is_published = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["display_name", "id"]
+        constraints = [
+            models.UniqueConstraint(Lower("slug"), name="storefront_slug_ci_uniq")
         ]
 
 

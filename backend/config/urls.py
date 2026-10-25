@@ -66,6 +66,10 @@ from inventory.views import (
     job_material_reservation_release_view,
     job_material_reservations_view,
 )
+from inventory.storefront_views import (
+    public_storefront_view,
+    storefront_profile_view,
+)
 from purchasing.views import (
     purchase_order_cancel_view,
     purchase_order_detail_view,
@@ -78,6 +82,11 @@ from purchasing.views import (
 )
 
 urlpatterns = [
+    path(
+        "api/storefronts/<slug:slug>/",
+        public_storefront_view,
+        name="public-storefront",
+    ),
     path("health/live/", health_live_view, name="health-live"),
     path("health/ready/", health_ready_view, name="health-ready"),
     path("admin/", admin.site.urls),
@@ -107,6 +116,11 @@ urlpatterns = [
         "api/organizations/<uuid:organization_id>/inventory/",
         inventory_view,
         name="inventory",
+    ),
+    path(
+        "api/organizations/<uuid:organization_id>/storefront/",
+        storefront_profile_view,
+        name="storefront-profile",
     ),
     path(
         "api/organizations/<uuid:organization_id>/inventory/products/",
