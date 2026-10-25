@@ -1,6 +1,6 @@
 # M5 Internal Alpha Readiness Review
 
-**Status:** Documentation and local synthetic readiness review completed; local deletion journal/replay and the [local synthetic operating checklist](M5_LOCAL_SYNTHETIC_OPERATING_CHECKLIST.md) are implemented; production and hosted gates remain open
+**Status:** Local synthetic M5 baseline complete; hosted and real-data gates remain deferred. The local deletion journal/replay and [local synthetic operating checklist](M5_LOCAL_SYNTHETIC_OPERATING_CHECKLIST.md) are implemented.
 **Reviewed:** Baseline review 15 October 2026; deletion-ledger design evaluation 20 October 2026; inventory role-matrix follow-up 21 October 2026
 **Scope:** Tenant and role boundaries, support access, endpoint abuse controls, synthetic expense evidence, database recovery, monitoring, incident ownership, and sensitive logging.
 
