@@ -1,6 +1,6 @@
 [project]
 name = "tridim-business-tooling"
-version = "0.26.0"
+version = "0.26.1"
 description = "Development and release tooling for Tridim Business"
 requires-python = ">=3.12"
 dependencies = [
@@ -9,7 +9,7 @@ dependencies = [
     "dj-database-url>=2.3,<4",
     "psycopg[binary]>=3.2,<4",
     "mpesa-sdk>=1.1.0,<3",
-    "pillow>=11,<14",
+    "pillow>=13,<14",
     "pypdf>=5,<7",
 ]
 
