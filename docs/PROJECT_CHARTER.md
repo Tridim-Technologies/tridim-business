@@ -32,7 +32,7 @@ Keep organization separation, server-side authorization, auditability, privacy a
 - Native Android/iOS apps before a concrete device or offline requirement exists.
 - Country compliance, certifications, service levels or savings claims that have not been verified.
 
-Merchant-branded storefronts remain a possible longer-term direction. Keep storefront identity distinct from the internal business administration experience.
+The first merchant storefront increment is a public, read-only product catalog, separate from the internal business administration experience. Checkout, customer accounts, orders, payments, and broader commerce workflows remain future candidates.
 
 ## Technical foundation
 

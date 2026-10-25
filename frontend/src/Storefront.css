@@ -1,0 +1,129 @@
+.storefront-page {
+  min-height: 100vh;
+  background: #f5f7fa;
+  color: #17212b;
+  font-family: inherit;
+}
+
+.storefront-header {
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid #dce4ec;
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem clamp(1.25rem, 5vw, 4.5rem);
+}
+
+.storefront-header a {
+  color: #145d9c;
+  font-size: 0.95rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.storefront-header span,
+.storefront-footer,
+.storefront-unit {
+  color: #637181;
+  font-size: 0.85rem;
+}
+
+.storefront-hero {
+  margin: 0 auto;
+  max-width: 72rem;
+  padding: clamp(3.25rem, 10vw, 7rem) 1.5rem 3rem;
+}
+
+.storefront-hero .eyebrow {
+  color: #1768a9;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.storefront-hero h1 {
+  font-size: clamp(2.4rem, 6vw, 4.8rem);
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+  margin: 0.75rem 0;
+  overflow-wrap: anywhere;
+}
+
+.storefront-hero > p:last-child {
+  color: #637181;
+  font-size: clamp(1.05rem, 2.5vw, 1.25rem);
+}
+
+.storefront-products {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  margin: 0 auto;
+  max-width: 72rem;
+  padding: 0 1.5rem 2.5rem;
+}
+
+.storefront-product {
+  align-items: start;
+  background: #fff;
+  border: 1px solid #e0e7ee;
+  border-radius: 1rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  padding: 1.25rem;
+}
+
+.storefront-product-mark {
+  align-items: center;
+  background: #e8f2fb;
+  border-radius: 0.8rem;
+  color: #145d9c;
+  display: flex;
+  font-size: 1.4rem;
+  font-weight: 800;
+  height: 3.5rem;
+  justify-content: center;
+}
+
+.storefront-product-body h2 {
+  font-size: 1.15rem;
+  margin: 0.15rem 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.storefront-product-body p {
+  color: #536171;
+  line-height: 1.55;
+  margin: 0 0 0.7rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.storefront-price {
+  grid-column: 2;
+  font-size: 1.05rem;
+}
+
+.storefront-footer,
+.storefront-message {
+  margin: 0 auto;
+  max-width: 72rem;
+  padding: 1.5rem;
+}
+
+.storefront-message h1 {
+  font-size: 1.8rem;
+}
+
+@media (max-width: 520px) {
+  .storefront-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .storefront-hero {
+    padding-top: 3.25rem;
+  }
+}

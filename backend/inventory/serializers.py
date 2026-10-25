@@ -8,6 +8,7 @@ from .models import (
     Location,
     Product,
     StockMovement,
+    StorefrontProfile,
 )
 
 
@@ -41,10 +42,37 @@ class ProductWriteSerializer(StrictSerializer):
         required=False,
         default=Decimal("0.000"),
     )
+    storefront_description = serializers.CharField(
+        max_length=5000, allow_blank=True, required=False, trim_whitespace=True
+    )
+    storefront_price = ExactDecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.00"),
+        allow_null=True,
+        required=False,
+    )
+    is_published = serializers.BooleanField(required=False)
     is_active = serializers.BooleanField(required=False)
 
     def validate_sku(self, value):
         return value.strip().upper()
+
+    def validate_storefront_price(self, value):
+        if isinstance(self.initial_data.get("storefront_price"), float):
+            raise serializers.ValidationError("Send prices as decimal strings.")
+        return value
+
+
+class StorefrontProfileWriteSerializer(StrictSerializer):
+    slug = serializers.RegexField(
+        regex=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=64
+    )
+    display_name = serializers.CharField(
+        max_length=120, min_length=2, trim_whitespace=True
+    )
+    currency = serializers.RegexField(regex=r"^[A-Z]{3}$", max_length=3)
+    is_published = serializers.BooleanField()
 
 
 class LocationWriteSerializer(StrictSerializer):
@@ -222,9 +250,19 @@ class ProductSerializer(serializers.ModelSerializer):
             "name",
             "base_unit",
             "reorder_point",
+            "storefront_description",
+            "storefront_price",
+            "is_published",
             "is_active",
             "created_at",
         )
+        read_only_fields = fields
+
+
+class StorefrontProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StorefrontProfile
+        fields = ("slug", "display_name", "currency", "is_published")
         read_only_fields = fields
 
 

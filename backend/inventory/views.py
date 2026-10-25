@@ -51,6 +51,12 @@ WRITERS = {
     Membership.Role.ADMIN,
     Membership.Role.OPERATIONS,
 }
+STOREFRONT_MANAGERS = {Membership.Role.OWNER, Membership.Role.ADMIN}
+STOREFRONT_FIELDS = {
+    "storefront_description",
+    "storefront_price",
+    "is_published",
+}
 
 
 def _membership(request, organization_id, *, write=False):
@@ -156,12 +162,27 @@ def inventory_view(request, organization_id):
 
 @require_http_methods(["POST"])
 def inventory_products_view(request, organization_id):
-    _, error = _membership(request, organization_id, write=True)
+    membership, error = _membership(request, organization_id, write=True)
     if error:
         return error
     values, error = _payload(request, ProductWriteSerializer)
     if error:
         return error
+    if STOREFRONT_FIELDS.intersection(values) and membership.role not in STOREFRONT_MANAGERS:
+        return JsonResponse(
+            {"detail": "Only organization owners and admins can manage public listings."},
+            status=403,
+        )
+    if values.get("is_published") and (
+        not values.get("storefront_description", "").strip()
+        or values.get("storefront_price") is None
+    ):
+        return JsonResponse(
+            {
+                "detail": "Add a public description and price before publishing a product."
+            },
+            status=400,
+        )
     if Product.objects.filter(
         organization_id=organization_id, sku__iexact=values["sku"]
     ).exists():
@@ -181,7 +202,7 @@ def inventory_products_view(request, organization_id):
 
 @require_http_methods(["PATCH"])
 def inventory_product_detail_view(request, organization_id, product_id):
-    _, error = _membership(request, organization_id, write=True)
+    membership, error = _membership(request, organization_id, write=True)
     if error:
         return error
     values, error = _payload(request, ProductWriteSerializer, partial=True)
@@ -189,6 +210,11 @@ def inventory_product_detail_view(request, organization_id, product_id):
         return error
     if not values:
         return JsonResponse({"detail": "Provide product fields to update."}, status=400)
+    if STOREFRONT_FIELDS.intersection(values) and membership.role not in STOREFRONT_MANAGERS:
+        return JsonResponse(
+            {"detail": "Only organization owners and admins can manage public listings."},
+            status=403,
+        )
     with transaction.atomic():
         Organization.objects.select_for_update().get(pk=organization_id)
         product = (
@@ -198,6 +224,18 @@ def inventory_product_detail_view(request, organization_id, product_id):
         )
         if product is None:
             return JsonResponse({"detail": "Product not found."}, status=404)
+        final_description = values.get(
+            "storefront_description", product.storefront_description
+        )
+        final_price = values.get("storefront_price", product.storefront_price)
+        final_published = values.get("is_published", product.is_published)
+        if final_published and (not final_description.strip() or final_price is None):
+            return JsonResponse(
+                {
+                    "detail": "Add a public description and price before publishing a product."
+                },
+                status=400,
+            )
         if (
             "sku" in values
             and Product.objects.filter(
@@ -238,6 +276,7 @@ def inventory_product_detail_view(request, organization_id, product_id):
                     },
                     status=409,
                 )
+            values["is_published"] = False
         for name, value in values.items():
             setattr(product, name, value)
         try:
