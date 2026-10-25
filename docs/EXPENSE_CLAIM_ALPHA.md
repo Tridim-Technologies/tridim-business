@@ -18,6 +18,17 @@ Claimants retain their own claim history after job unassignment while they remai
 
 ## Local synthetic receipt evidence
 
+Before exercising the synthetic expense-evidence flow, run:
+
+```bash
+uv run python backend/manage.py check_local_readiness
+```
+
+This development-only diagnostic verifies safe defaults, bounded cleanup
+settings, private evidence paths, and (when evidence is enabled) the ClamAV Unix
+socket. It does not authorize real evidence, production use, or hosted
+deployment. Resolve a failed check before enabling synthetic uploads.
+
 The local walkthrough uses these tools:
 
 - The **official ClamAV universal macOS package** installs the scanner on Intel and Apple Silicon. **Homebrew** is an alternative package manager.
