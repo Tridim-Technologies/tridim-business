@@ -2,6 +2,34 @@
 
 <!-- version list -->
 
+## v0.26.1 (2026-10-25)
+
+### Bug Fixes
+
+- **security**: Require patched Pillow minimum
+  ([`c751232`](https://github.com/Tridim-Technologies/tridim-business/commit/c751232fa713a46f560407a39c9555ff86332400))
+
+### Chores
+
+- **deps**: Bump certifi to 2026.10.19
+  ([`ffc9ae0`](https://github.com/Tridim-Technologies/tridim-business/commit/ffc9ae0106532e3f881b0145073f3d2302e60504))
+
+- **deps**: Bump gitpython from 3.2.0 to 3.2.1
+  ([#127](https://github.com/Tridim-Technologies/tridim-business/pull/127),
+  [`1675374`](https://github.com/Tridim-Technologies/tridim-business/commit/1675374969d5a81fee6914eb27acb56ec33a59de))
+
+- **deps**: Bump pillow to 13.0.0
+  ([`79c1d18`](https://github.com/Tridim-Technologies/tridim-business/commit/79c1d18f260b6e644aeaefaa9e2382735fde1c4b))
+
+- **deps**: Bump pypdf from 6.20.1 to 6.21.2
+  ([#126](https://github.com/Tridim-Technologies/tridim-business/pull/126),
+  [`2f389e9`](https://github.com/Tridim-Technologies/tridim-business/commit/2f389e95842e48c02e6391b5f384d72e01bb18ea))
+
+- **deps-dev**: Bump ruff from 0.17.0 to 0.17.1
+  ([#122](https://github.com/Tridim-Technologies/tridim-business/pull/122),
+  [`8afe313`](https://github.com/Tridim-Technologies/tridim-business/commit/8afe313d23791c48481dd914be313c4a92e01e82))
+
+
 ## v0.26.0 (2026-10-22)
 
 ### Features
