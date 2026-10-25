@@ -32,7 +32,7 @@ Use the package manager to change manifests and lockfiles together:
 - Python development dependency: `uv add --dev <package>`
 - Frontend dependency: `cd frontend && npm install <package>`
 
-Use the corresponding remove command when deleting a dependency. Review the resulting manifest and lockfile diff, then run the same checks used by CI. Do not widen version constraints solely to make an automated update pass; decide compatibility deliberately.
+Use the corresponding remove command when deleting a dependency. Review the resulting manifest and lockfile diff, then run the same checks used by CI. For a known vulnerability, set the minimum version at or above the advisory's patched release; a safe lockfile alone does not prevent future installs from selecting affected versions. Do not widen version constraints solely to make an automated update pass; decide compatibility deliberately.
 
 ## Local validation
 
