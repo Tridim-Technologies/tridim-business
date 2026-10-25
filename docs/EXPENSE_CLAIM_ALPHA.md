@@ -29,6 +29,9 @@ settings, private evidence paths, and (when evidence is enabled) the ClamAV Unix
 socket. It does not authorize real evidence, production use, or hosted
 deployment. Resolve a failed check before enabling synthetic uploads.
 
+For the complete local operator sequence, including abuse and evidence cleanup,
+see the [M5 local synthetic operating checklist](M5_LOCAL_SYNTHETIC_OPERATING_CHECKLIST.md).
+
 The local walkthrough uses these tools:
 
 - The **official ClamAV universal macOS package** installs the scanner on Intel and Apple Silicon. **Homebrew** is an alternative package manager.
