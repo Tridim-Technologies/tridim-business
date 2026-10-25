@@ -2,6 +2,26 @@
 
 <!-- version list -->
 
+## v0.27.0 (2026-10-25)
+
+### Chores
+
+- **deps**: Bump react to 19.3.1
+  ([`d53e591`](https://github.com/Tridim-Technologies/tridim-business/commit/d53e591cd187f0c26cbcee4bfd115a7503fed9e2))
+
+- **deps**: Bump react-dom to 19.3.1
+  ([`533b2eb`](https://github.com/Tridim-Technologies/tridim-business/commit/533b2ebbcc0b4ecf07c7b1a40806c3836ec1bdae))
+
+- **deps-dev**: Bump pymarkdownlnt to 0.9.41
+  ([`14f09cc`](https://github.com/Tridim-Technologies/tridim-business/commit/14f09cccb38ce8c75f00875774891d5e6bf7e785))
+
+### Features
+
+- **storefront**: Add a public merchant catalog
+  ([#131](https://github.com/Tridim-Technologies/tridim-business/pull/131),
+  [`4066c6f`](https://github.com/Tridim-Technologies/tridim-business/commit/4066c6faf3ba080f129b2378f1b44751a65e770a))
+
+
 ## v0.26.1 (2026-10-25)
 
 ### Bug Fixes
