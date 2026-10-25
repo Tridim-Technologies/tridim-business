@@ -28,7 +28,9 @@ def storefront_profile_view(request, organization_id):
 
     if membership.role not in MANAGERS:
         return JsonResponse(
-            {"detail": "Only organization owners and admins can manage the storefront."},
+            {
+                "detail": "Only organization owners and admins can manage the storefront."
+            },
             status=403,
         )
     values, error = _payload(request, StorefrontProfileWriteSerializer)
@@ -41,9 +43,7 @@ def storefront_profile_view(request, organization_id):
             profile = StorefrontProfile.objects.filter(
                 organization_id=organization_id
             ).first()
-            duplicate = StorefrontProfile.objects.filter(
-                slug__iexact=values["slug"]
-            )
+            duplicate = StorefrontProfile.objects.filter(slug__iexact=values["slug"])
             if profile:
                 duplicate = duplicate.exclude(pk=profile.pk)
             if duplicate.exists():

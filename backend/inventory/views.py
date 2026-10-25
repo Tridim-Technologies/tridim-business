@@ -168,9 +168,14 @@ def inventory_products_view(request, organization_id):
     values, error = _payload(request, ProductWriteSerializer)
     if error:
         return error
-    if STOREFRONT_FIELDS.intersection(values) and membership.role not in STOREFRONT_MANAGERS:
+    if (
+        STOREFRONT_FIELDS.intersection(values)
+        and membership.role not in STOREFRONT_MANAGERS
+    ):
         return JsonResponse(
-            {"detail": "Only organization owners and admins can manage public listings."},
+            {
+                "detail": "Only organization owners and admins can manage public listings."
+            },
             status=403,
         )
     if values.get("is_published") and (
@@ -210,9 +215,14 @@ def inventory_product_detail_view(request, organization_id, product_id):
         return error
     if not values:
         return JsonResponse({"detail": "Provide product fields to update."}, status=400)
-    if STOREFRONT_FIELDS.intersection(values) and membership.role not in STOREFRONT_MANAGERS:
+    if (
+        STOREFRONT_FIELDS.intersection(values)
+        and membership.role not in STOREFRONT_MANAGERS
+    ):
         return JsonResponse(
-            {"detail": "Only organization owners and admins can manage public listings."},
+            {
+                "detail": "Only organization owners and admins can manage public listings."
+            },
             status=403,
         )
     with transaction.atomic():

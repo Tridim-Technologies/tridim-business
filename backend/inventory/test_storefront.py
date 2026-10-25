@@ -27,9 +27,7 @@ class StorefrontTests(TestCase):
                 organization=self.organization, user=user, role=role
             )
         self.profile_url = reverse("storefront-profile", args=[self.organization.pk])
-        self.product_url = reverse(
-            "inventory-products", args=[self.organization.pk]
-        )
+        self.product_url = reverse("inventory-products", args=[self.organization.pk])
         self.client.force_login(self.owner)
 
     def request_json(self, method, url, data, *, user=None):
@@ -82,7 +80,9 @@ class StorefrontTests(TestCase):
             200,
         )
         self.assertEqual(
-            self.configure_storefront(slug="ops-shop", user=self.operations).status_code,
+            self.configure_storefront(
+                slug="ops-shop", user=self.operations
+            ).status_code,
             403,
         )
         self.assertEqual(self.client.get(self.profile_url).status_code, 200)
@@ -130,9 +130,7 @@ class StorefrontTests(TestCase):
         self.assertNotIn("OTHER-TENANT", response.content.decode())
 
     def test_unpublished_profile_is_not_public(self):
-        self.assertEqual(
-            self.configure_storefront(is_published=False).status_code, 200
-        )
+        self.assertEqual(self.configure_storefront(is_published=False).status_code, 200)
         response = self.client.get(reverse("public-storefront", args=["sample-shop"]))
         self.assertEqual(response.status_code, 404)
 

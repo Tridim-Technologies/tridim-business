@@ -7,59 +7,95 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0005_organizationinvitation'),
-        ('inventory', '0005_jobmaterialreservation_jobmaterialreservationline_and_more'),
+        ("accounts", "0005_organizationinvitation"),
+        (
+            "inventory",
+            "0005_jobmaterialreservation_jobmaterialreservationline_and_more",
+        ),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='StorefrontProfile',
+            name="StorefrontProfile",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('slug', models.SlugField(max_length=64)),
-                ('display_name', models.CharField(max_length=120)),
-                ('currency', models.CharField(max_length=3)),
-                ('is_published', models.BooleanField(default=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("slug", models.SlugField(max_length=64)),
+                ("display_name", models.CharField(max_length=120)),
+                ("currency", models.CharField(max_length=3)),
+                ("is_published", models.BooleanField(default=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
             ],
             options={
-                'ordering': ['display_name', 'id'],
+                "ordering": ["display_name", "id"],
             },
         ),
         migrations.AddField(
-            model_name='product',
-            name='is_published',
+            model_name="product",
+            name="is_published",
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
-            model_name='product',
-            name='storefront_description',
-            field=models.TextField(blank=True, default=''),
+            model_name="product",
+            name="storefront_description",
+            field=models.TextField(blank=True, default=""),
         ),
         migrations.AddField(
-            model_name='product',
-            name='storefront_price',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=12, null=True),
+            model_name="product",
+            name="storefront_price",
+            field=models.DecimalField(
+                blank=True, decimal_places=2, max_digits=12, null=True
+            ),
         ),
         migrations.AddConstraint(
-            model_name='product',
-            constraint=models.CheckConstraint(condition=models.Q(('storefront_price__isnull', True), ('storefront_price__gte', 0), _connector='OR'), name='inventory_storefront_price_nonnegative'),
+            model_name="product",
+            constraint=models.CheckConstraint(
+                condition=models.Q(
+                    ("storefront_price__isnull", True),
+                    ("storefront_price__gte", 0),
+                    _connector="OR",
+                ),
+                name="inventory_storefront_price_nonnegative",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='product',
-            constraint=models.CheckConstraint(condition=models.Q(('is_published', False), models.Q(models.Q(('storefront_description', ''), _negated=True), ('storefront_price__isnull', False)), _connector='OR'), name='inventory_published_product_complete'),
+            model_name="product",
+            constraint=models.CheckConstraint(
+                condition=models.Q(
+                    ("is_published", False),
+                    models.Q(
+                        models.Q(("storefront_description", ""), _negated=True),
+                        ("storefront_price__isnull", False),
+                    ),
+                    _connector="OR",
+                ),
+                name="inventory_published_product_complete",
+            ),
         ),
         migrations.AddField(
-            model_name='storefrontprofile',
-            name='organization',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='storefront_profile', to='accounts.organization'),
+            model_name="storefrontprofile",
+            name="organization",
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="storefront_profile",
+                to="accounts.organization",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='storefrontprofile',
-            constraint=models.UniqueConstraint(django.db.models.functions.text.Lower('slug'), name='storefront_slug_ci_uniq'),
+            model_name="storefrontprofile",
+            constraint=models.UniqueConstraint(
+                django.db.models.functions.text.Lower("slug"),
+                name="storefront_slug_ci_uniq",
+            ),
         ),
     ]

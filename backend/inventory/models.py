@@ -75,9 +75,7 @@ class StorefrontProfile(models.Model):
     class Meta:
         ordering = ["display_name", "id"]
         constraints = [
-            models.UniqueConstraint(
-                Lower("slug"), name="storefront_slug_ci_uniq"
-            )
+            models.UniqueConstraint(Lower("slug"), name="storefront_slug_ci_uniq")
         ]
 
 

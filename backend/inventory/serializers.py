@@ -65,9 +65,7 @@ class ProductWriteSerializer(StrictSerializer):
 
 
 class StorefrontProfileWriteSerializer(StrictSerializer):
-    slug = serializers.RegexField(
-        regex=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=64
-    )
+    slug = serializers.RegexField(regex=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=64)
     display_name = serializers.CharField(
         max_length=120, min_length=2, trim_whitespace=True
     )
