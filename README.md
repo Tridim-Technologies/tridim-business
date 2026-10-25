@@ -30,7 +30,7 @@ The initial stack is Python 3.12+, Django, Django REST Framework, PostgreSQL and
 
 ## Run locally
 
-Requirements: `uv`, Python 3.12+, Node.js 22+, and npm. PostgreSQL is recommended; SQLite is available for a quick local start.
+Requirements: `uv`, Python 3.12+, Node.js 24.21.0, and npm. PostgreSQL is recommended; SQLite is available for a quick local start.
 
 ```sh
 uv sync --locked
