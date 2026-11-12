@@ -10,7 +10,7 @@ dependencies = [
     "psycopg[binary]>=3.2,<4",
     "mpesa-sdk>=1.1.0,<3",
     "pillow>=13,<14",
-    "pypdf>=5,<7",
+    "pypdf>=5,<8",
 ]
 
 [dependency-groups]
